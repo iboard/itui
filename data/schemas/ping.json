@@ -1,0 +1,20 @@
+{
+  "name": "ping",
+  "label": "Ping a host",
+  "fields": [
+    {
+      "name": "host",
+      "label": "Host",
+      "type": "string",
+      "required": true,
+      "default": "localhost"
+    },
+    {
+      "name": "count",
+      "label": "Packets",
+      "type": "integer",
+      "required": true,
+      "default": 3
+    }
+  ]
+}

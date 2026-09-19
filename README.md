@@ -12,19 +12,25 @@ the parameters those commands need.
 
 ## Features
 
-- **Structured menus** — nested entries that call system commands and applications.
-- **Simple forms** — collect parameters before a command runs.
+- **Structured menus** — nested entries that call system commands and
+  applications, described in `data/menus/main.json`.
+- **Simple forms** — a menu entry can ask for a command's arguments before it
+  runs, and fill its `{{placeholders}}` with the answers.
 - **Declarative schemas** — forms and data structures are defined in
   `data/schemas/*.json`, not in code.
-- **Data layer** — a repository abstraction over the JSON-backed schemas,
-  moving towards Ecto.
+- **Data layer** — one repository interface, with records kept in readable JSON
+  files, on its way to Ecto.
+- **A todo list** — the forms and the data layer with a screen in front of them.
 
 ## Status
 
 Early development.
 
 - **Menu MVP** — done: `df`, `uptime` and `free` run from the menu.
-- **Forms & data MVP** — next: a small todo application driven by JSON schemas.
+- **Forms & data MVP** — done: schemas in `data/schemas/`, a JSON-backed
+  repository, forms over both, and a todo list built out of them.
+- **Ecto** — next: the repository rewritten as an Ecto adapter over the same
+  schemas and files.
 
 ## Installation
 
@@ -96,14 +102,69 @@ A menu file that does not parse is reported on screen rather than stopping the
 application: a terminal that says what is wrong with the file is more use than
 one that refuses to open.
 
+## Schemas, forms and data
+
+A schema file says what a thing holds. The same declaration draws the form and
+stores the record, so a field added to the file shows up in both:
+
+```json
+{
+  "name": "todo",
+  "label": "Todo",
+  "title": "Todos",
+  "source": "data/records/todos.json",
+  "fields": [
+    { "name": "title", "label": "Title", "type": "string", "required": true },
+    { "name": "priority", "label": "Priority", "type": "integer", "default": 2 },
+    { "name": "done", "label": "Done", "type": "boolean", "default": false }
+  ]
+}
+```
+
+Fields are `string`, `integer` or `boolean`; a boolean is a toggle in the form
+rather than a text field. `source` is where `ITui.Repo` keeps the records —
+a plain JSON array anyone can open in an editor. A schema with no `source` is
+a form and nothing more, which is what a command's arguments need.
+
+Records go through one interface, `ITui.Repo`, with the adapter behind it named
+in the configuration:
+
+```elixir
+config :i_tui, repo: ITui.Repo.Json
+```
+
+### The todo list
+
+`data/schemas/todo.json` and the `Todos` menu entry are the whole application:
+`a` adds, `enter` edits, `space` marks one done, `d` then `y` deletes, `r`
+re-reads the file. Nothing in `ITui.Views.Todo` mentions a title or a priority.
+
+### Forms for a command
+
+A command entry that names a `"form"` asks for its arguments first, and fills
+the `{{placeholders}}` with what the form collected:
+
+```json
+{
+  "key": "p",
+  "label": "Ping a host",
+  "command": "ping",
+  "args": ["-c", "{{count}}", "{{host}}"],
+  "form": "ping"
+}
+```
+
 ## Layout
 
 ```
 data/menus/main.json     the menu, as data
-data/schemas/            form and data-structure schemas (next milestone)
+data/schemas/*.json      forms and data structures, as data
+data/records/*.json      the records themselves
 lib/i_tui/menu.ex        the menu file, parsed
 lib/i_tui/command.ex     a system command, and the running of it
-lib/i_tui/views/         the ATUI views: the menu, and the output popup
+lib/i_tui/schema.ex      a schema file, parsed, and the casting of values
+lib/i_tui/repo.ex        where records live, behind one interface
+lib/i_tui/views/         the ATUI views: menu, output, form, todo list
 ```
 
 ## Documentation

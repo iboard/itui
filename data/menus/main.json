@@ -25,8 +25,22 @@
           "description": "Memory and swap in use",
           "command": "free",
           "args": ["-h"]
+        },
+        {
+          "key": "p",
+          "label": "Ping a host",
+          "description": "Asks for a host and how many packets, then pings it",
+          "command": "ping",
+          "args": ["-c", "{{count}}", "{{host}}"],
+          "form": "ping"
         }
       ]
+    },
+    {
+      "key": "t",
+      "label": "Todos",
+      "description": "A small todo list, kept in data/records/todos.json",
+      "view": "todo"
     },
     {
       "key": "q",

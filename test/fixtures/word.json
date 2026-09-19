@@ -1,0 +1,7 @@
+{
+  "name": "word",
+  "label": "Word",
+  "fields": [
+    { "name": "word", "label": "Word", "type": "string", "required": true }
+  ]
+}

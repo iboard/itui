@@ -1,0 +1,28 @@
+{
+  "name": "todo",
+  "label": "Todo",
+  "title": "Todos",
+  "source": "data/records/todos.json",
+  "fields": [
+    {
+      "name": "title",
+      "label": "Title",
+      "type": "string",
+      "required": true,
+      "placeholder": "what needs doing"
+    },
+    {
+      "name": "priority",
+      "label": "Priority",
+      "type": "integer",
+      "default": 2,
+      "placeholder": "1 is highest"
+    },
+    {
+      "name": "done",
+      "label": "Done",
+      "type": "boolean",
+      "default": false
+    }
+  ]
+}

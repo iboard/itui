@@ -29,3 +29,6 @@ i_tui-*.tar
 # Editor and language server artifacts
 /.elixir_ls/
 /.lexical/
+
+# Records belong to whoever is running iTUI, not to the repository
+/data/records/*.json

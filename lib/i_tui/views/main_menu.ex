@@ -24,8 +24,9 @@ defmodule ITui.Views.MainMenu do
   use Atui.View
 
   alias Atui.{Layout, Style, Text}
-  alias ITui.{Command, Menu}
+  alias ITui.{Command, Menu, Schema, Views}
   alias ITui.Menu.Item
+  alias ITui.Views.{Form, Output}
 
   @impl Atui.View
   def mount(opts) do
@@ -35,14 +36,24 @@ defmodule ITui.Views.MainMenu do
         :error -> load(Keyword.get(opts, :path))
       end
 
-    {:ok, %{menu: menu, trail: [], cursor: 0, error: error, busy: nil, popup?: false}}
+    {:ok,
+     %{
+       menu: menu,
+       trail: [],
+       cursor: 0,
+       error: error,
+       busy: nil,
+       pending: nil,
+       popup?: false
+     }}
   end
 
   @impl Atui.View
   def handle_key(:ctrl_c, state), do: {:halt, state}
 
   # The popup owns the keyboard while it is open. The flag is set when the
-  # popup is pushed and cleared when it says it has closed, so a key that
+  # popup is pushed and cleared when it says it has closed (`ITui.Views.Popup`),
+  # so a key that
   # arrives in the same read as the one that closed it is dropped rather than
   # moving a cursor nobody can see — the safer of the two mistakes.
   def handle_key(_key, %{popup?: true} = state), do: {:pass, state}
@@ -75,17 +86,25 @@ defmodule ITui.Views.MainMenu do
   def handle_key(_key, state), do: {:pass, state}
 
   @impl Atui.View
-  def handle_event({:output, result}, %{busy: %Item{} = item} = state) do
-    {:push, ITui.Views.Output,
+  def handle_event({:output, result}, %{busy: {%Item{} = item, command}} = state) do
+    {:push, Output,
      [
        title: item.label,
-       subtitle: Command.to_string(item.command),
+       subtitle: Command.to_string(command),
        result: result,
        notify: __MODULE__
      ], %{state | busy: nil, popup?: true}}
   end
 
-  def handle_event(:output_closed, state), do: {:ok, %{state | popup?: false}}
+  # The form the entry asked for has closed with values: now the command runs.
+  def handle_event({:popup_closed, Form, {:submitted, attrs}}, %{pending: %Item{} = item} = state) do
+    {:ok, run(%{state | pending: nil, popup?: false}, item, attrs)}
+  end
+
+  def handle_event({:popup_closed, _module, _result}, state) do
+    {:ok, %{state | popup?: false, pending: nil}}
+  end
+
   def handle_event(_event, state), do: {:ok, state}
 
   @impl Atui.View
@@ -146,8 +165,8 @@ defmodule ITui.Views.MainMenu do
 
   defp status(%{error: error}, _width) when is_binary(error), do: "the menu could not be loaded"
 
-  defp status(%{busy: %Item{} = item}, width) do
-    Screen.truncate("running #{Command.to_string(item.command)} …", width)
+  defp status(%{busy: {%Item{}, command}}, width) do
+    Screen.truncate("running #{Command.to_string(command)} …", width)
   end
 
   defp status(state, width) do
@@ -174,17 +193,48 @@ defmodule ITui.Views.MainMenu do
     case Item.type(item) do
       :submenu -> {:ok, descend(state, item)}
       :action -> action(state, item.action)
-      :command -> {:ok, run(state, item)}
+      :view -> open(state, item)
+      :command -> command(state, item)
     end
   end
 
   defp action(state, :quit), do: {:halt, state}
 
-  # Off the runtime's process: a slow command must not stop the UI drawing.
-  defp run(state, %Item{} = item) do
-    Atui.Fetch.start(__MODULE__, :output, fn -> Command.run(item.command) end)
+  # An entry that names a form asks for its arguments before it runs anything.
+  defp command(state, %Item{form: nil} = item), do: {:ok, run(state, item, %{})}
 
-    %{state | busy: item}
+  defp command(state, %Item{form: name} = item) do
+    case Schema.load(name) do
+      {:ok, schema} ->
+        {:push, Form, [schema: schema, title: item.label, notify: __MODULE__],
+         %{state | pending: item, popup?: true}}
+
+      {:error, reason} ->
+        complain(state, item, reason)
+    end
+  end
+
+  defp open(state, %Item{view: name} = item) do
+    case Views.fetch(name) do
+      {:ok, module} -> {:push, module, [notify: __MODULE__], %{state | popup?: true}}
+      {:error, reason} -> complain(state, item, reason)
+    end
+  end
+
+  # A menu file that names something that is not there is worth saying out
+  # loud, rather than a key that quietly does nothing.
+  defp complain(state, %Item{} = item, reason) do
+    {:push, Output, [title: item.label, result: {:error, reason}, notify: __MODULE__],
+     %{state | popup?: true}}
+  end
+
+  # Off the runtime's process: a slow command must not stop the UI drawing.
+  defp run(state, %Item{} = item, params) do
+    command = Command.render(item.command, params)
+
+    Atui.Fetch.start(__MODULE__, :output, fn -> Command.run(command) end)
+
+    %{state | busy: {item, command}}
   end
 
   defp descend(state, %Item{} = item) do

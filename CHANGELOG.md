@@ -18,3 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ITui.Views.MainMenu` and `ITui.Views.Output` — the menu itself and the
   scrollable popup that shows what a command printed.
 - `bin/itui`, which starts the UI with the `+Bc` flag a TUI needs.
+- Schemas: `ITui.Schema` and `ITui.Schema.Field` read `data/schemas/*.json` and
+  cast values into the types they declare.
+- A data layer: `ITui.Repo` is one interface with an adapter behind it, and
+  `ITui.Repo.Json` keeps each schema's records in the JSON file it names.
+- `ITui.Views.Form` — a form over a schema, with per-field validation.
+- `ITui.Views.Todo` — the todo list, built out of `data/schemas/todo.json` and
+  nothing else.
+- Menu entries can open an application (`"view"`) and can ask for a command's
+  arguments first (`"form"`), filling the `{{placeholders}}` in its arguments.

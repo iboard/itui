@@ -40,6 +40,24 @@ defmodule ITui.Command do
   end
 
   @doc """
+  Fills the `{{placeholders}}` in the arguments from a form's values.
+
+  A menu entry that names a form says where the values go by writing the field
+  names into its arguments; a placeholder with nothing to fill it becomes an
+  empty argument, which is why a field a command needs should be required.
+
+      iex> ITui.Command.new("ping", ["-c", "{{count}}", "{{host}}"])
+      ...> |> ITui.Command.render(%{"count" => 3, "host" => "example.com"})
+      ...> |> ITui.Command.to_string()
+      "ping -c 3 example.com"
+
+  """
+  @spec render(t(), map()) :: t()
+  def render(%__MODULE__{} = command, params) when is_map(params) do
+    %{command | args: Enum.map(command.args, &fill(&1, params))}
+  end
+
+  @doc """
   Runs the command and captures its output.
 
   Returns `{:ok, output}` when the command exits with status 0, and
@@ -64,5 +82,11 @@ defmodule ITui.Command do
     end
   rescue
     error -> {:error, Exception.message(error)}
+  end
+
+  defp fill(arg, params) do
+    Regex.replace(~r/\{\{([a-zA-Z0-9_]+)\}\}/, arg, fn _match, name ->
+      Kernel.to_string(Map.get(params, name, ""))
+    end)
   end
 end

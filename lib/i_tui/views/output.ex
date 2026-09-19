@@ -4,13 +4,15 @@ defmodule ITui.Views.Output do
 
   Pushed by `ITui.Views.MainMenu` once a command has finished, it owns the
   keyboard while it is open: arrows and `page up`/`page down` scroll, `esc`,
-  `q` or `enter` close it. On the way out it tells the menu it has gone, so the
-  menu knows the keys are its own again.
+  `q` or `enter` close it. On the way out it tells whoever pushed it that it
+  has gone — see `ITui.Views.Popup` — so the menu knows the keys are its own
+  again.
   """
 
   use Atui.View
 
   alias Atui.{Layout, Style, Text}
+  alias ITui.Views.Popup
 
   @page 10
 
@@ -26,7 +28,7 @@ defmodule ITui.Views.Output do
      %{
        title: Keyword.get(opts, :title, "Output"),
        subtitle: Keyword.get(opts, :subtitle),
-       notify: Keyword.get(opts, :notify, ITui.Views.MainMenu),
+       notify: Keyword.get(opts, :notify),
        status: status,
        lines: lines(body),
        scroll: 0
@@ -69,12 +71,7 @@ defmodule ITui.Views.Output do
   end
 
   @impl Atui.View
-  def unmount(state) do
-    # The menu stops passing keys through once it knows the popup has closed.
-    Atui.Runtime.send_event_to(self(), state.notify, :output_closed)
-
-    :ok
-  end
+  def unmount(state), do: Popup.closed(state.notify, __MODULE__, :ok)
 
   defp lines(body) do
     case body

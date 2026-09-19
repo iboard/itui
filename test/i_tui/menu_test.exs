@@ -88,12 +88,22 @@ defmodule ITui.MenuTest do
   describe "load/1" do
     test "reads the menu that ships with the application" do
       assert {:ok, %Menu{title: "iTUI"} = menu} = Menu.load("data/menus/main.json")
-      assert [%Item{label: "System"}, %Item{label: "Quit"}] = menu.items
+
+      assert [%Item{label: "System"}, %Item{label: "Todos", view: "todo"}, %Item{action: :quit}] =
+               menu.items
 
       assert menu.items
              |> hd()
              |> Map.fetch!(:items)
-             |> Enum.map(&Command.to_string(&1.command)) == ["df -h", "uptime", "free -h"]
+             |> Enum.map(&Command.to_string(&1.command)) == [
+               "df -h",
+               "uptime",
+               "free -h",
+               "ping -c {{count}} {{host}}"
+             ]
+
+      assert menu.items |> hd() |> Map.fetch!(:items) |> List.last() |> Map.fetch!(:form) ==
+               "ping"
     end
 
     test "defaults to the configured menu file" do

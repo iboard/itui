@@ -42,6 +42,24 @@ defmodule ITui.UICase do
 
   def press(runtime, key), do: press(runtime, [key])
 
+  @doc "Types `text` one character at a time, as a keyboard would."
+  def type(runtime, text) do
+    press(runtime, text |> String.graphemes() |> Enum.map(&{:char, &1}))
+  end
+
+  @doc """
+  Lets the runtime finish what the last key set in motion, and returns the
+  frame.
+
+  A popup's parting message (`ITui.Views.Popup`) is sent while the key that
+  closed it is being handled, which puts it behind whatever the test has
+  already asked for. One more round trip is what makes it arrive.
+  """
+  def settle(runtime) do
+    text(runtime)
+    text(runtime)
+  end
+
   @doc "The last rendered frame as plain text, escape sequences stripped."
   def text(runtime), do: runtime |> Atui.Runtime.screen() |> Atui.Screen.to_text()
 

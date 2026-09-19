@@ -2,7 +2,7 @@ defmodule ITui.Views.MainMenuTest do
   use ITui.UICase, async: false
 
   alias ITui.Menu
-  alias ITui.Views.{MainMenu, Output}
+  alias ITui.Views.{Form, MainMenu, Output, Todo}
 
   @menu """
   {
@@ -16,6 +16,9 @@ defmodule ITui.Views.MainMenuTest do
       {"key": "f", "label": "Files", "items": [
         {"key": "p", "label": "Working directory", "command": "pwd"}
       ]},
+      {"key": "w", "label": "Echo a word", "command": "echo", "args": ["{{word}}"],
+       "form": "test/fixtures/word.json"},
+      {"key": "t", "label": "Todos", "view": "todo"},
       {"key": "q", "label": "Quit", "action": "quit"}
     ]
   }
@@ -122,6 +125,42 @@ defmodule ITui.Views.MainMenuTest do
     end
   end
 
+  describe "an entry that asks for its arguments" do
+    test "opens the form, then runs the command with what it collected", %{ui: ui} do
+      assert press(ui, {:char, "w"}) =~ "Echo a word"
+      assert Runtime.view_stack(ui) == [Form, MainMenu]
+
+      type(ui, "supercalifragilistic")
+      press(ui, :enter)
+
+      assert await_view(ui, Output) =~ "supercalifragilistic"
+      assert text(ui) =~ "echo supercalifragilistic"
+    end
+
+    test "a form that was cancelled runs nothing", %{ui: ui} do
+      press(ui, {:char, "w"})
+      press(ui, :esc)
+
+      assert settle(ui) =~ "▸ w  Echo a word"
+      assert Runtime.view_stack(ui) == [MainMenu]
+      assert Runtime.view_state(ui, MainMenu).busy == nil
+    end
+  end
+
+  describe "an entry that opens an application" do
+    test "pushes the view, and takes the keys back when it closes", %{ui: ui} do
+      assert press(ui, {:char, "t"}) =~ "Todos"
+      assert Runtime.view_stack(ui) == [Todo, MainMenu]
+
+      press(ui, :esc)
+      assert settle(ui) =~ "▸ t  Todos"
+      assert Runtime.view_stack(ui) == [MainMenu]
+
+      # The menu is listening again, rather than passing everything on.
+      assert press(ui, :home) =~ "▸ s  System"
+    end
+  end
+
   describe "quitting" do
     test "q stops the UI", %{ui: ui} do
       ref = Process.monitor(ui)
@@ -158,5 +197,39 @@ defmodule ITui.Views.MainMenuFileTest do
 
     assert screen =~ "no such file or directory"
     assert screen =~ "the menu could not be loaded"
+  end
+end
+
+defmodule ITui.Views.MainMenuMissingTest do
+  use ITui.UICase, async: false
+
+  alias ITui.Menu
+  alias ITui.Views.{MainMenu, Output}
+
+  @menu """
+  {"items": [
+    {"key": "v", "label": "Ghost", "view": "spreadsheet"},
+    {"key": "f", "label": "No form", "command": "echo", "form": "nonexistent"}
+  ]}
+  """
+
+  setup do
+    {:ok, menu} = Menu.parse(@menu)
+
+    %{ui: start_ui(MainMenu, menu: menu)}
+  end
+
+  test "an entry naming a view that does not exist says so", %{ui: ui} do
+    screen = press(ui, {:char, "v"})
+
+    assert Runtime.view_stack(ui) == [Output, MainMenu]
+    assert screen =~ ~s(unknown view "spreadsheet")
+    assert screen =~ "known views: todo"
+  end
+
+  test "an entry naming a form that is not there says so", %{ui: ui} do
+    screen = press(ui, {:char, "f"})
+
+    assert screen =~ "data/schemas/nonexistent.json: no such file or directory"
   end
 end
