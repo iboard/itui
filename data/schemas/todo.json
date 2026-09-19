@@ -3,6 +3,7 @@
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
+  "sort": "inserted_at",
   "fields": [
     {
       "name": "title",
@@ -10,6 +11,20 @@
       "type": "string",
       "required": true,
       "placeholder": "what needs doing"
+    },
+    {
+      "name": "description",
+      "label": "Description",
+      "type": "string",
+      "list": false,
+      "placeholder": "what it is about"
+    },
+    {
+      "name": "url",
+      "label": "URL",
+      "type": "string",
+      "list": false,
+      "placeholder": "https://…"
     },
     {
       "name": "priority",
@@ -23,6 +38,18 @@
       "label": "Done",
       "type": "boolean",
       "default": false
+    },
+    {
+      "name": "inserted_at",
+      "label": "Created",
+      "type": "datetime",
+      "form": false
+    },
+    {
+      "name": "done_at",
+      "label": "Checked off",
+      "type": "datetime",
+      "form": false
     }
   ]
 }

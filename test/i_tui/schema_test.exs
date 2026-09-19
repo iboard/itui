@@ -4,7 +4,7 @@ defmodule ITui.SchemaTest do
   doctest ITui.Schema.Field
 
   alias ITui.Schema
-  alias ITui.Schema.{Boolean, Field}
+  alias ITui.Schema.{Boolean, Field, Timestamp}
 
   defp messages({:error, changeset}, schema) do
     schema |> Schema.errors(changeset) |> Enum.map(fn {f, m} -> {f.label, m} end)
@@ -62,7 +62,7 @@ defmodule ITui.SchemaTest do
       json = ~s({"name": "t", "fields": [{"name": "n", "type": "date"}]})
       assert {:error, message} = Schema.parse(json)
       assert message =~ ~s(unknown type "date")
-      assert message =~ "known types: boolean, integer, string"
+      assert message =~ "known types: boolean, datetime, integer, string"
     end
 
     test "rejects a default the field could not hold" do
@@ -167,8 +167,80 @@ defmodule ITui.SchemaTest do
     test "give Ecto what a changeset needs" do
       {:ok, schema} = Schema.load("todo")
 
-      assert Schema.types(schema) == %{title: :string, priority: :integer, done: Boolean}
-      assert Schema.defaults(schema) == %{title: nil, priority: 2, done: false}
+      assert Schema.types(schema) == %{
+               title: :string,
+               description: :string,
+               url: :string,
+               priority: :integer,
+               done: Boolean,
+               inserted_at: Timestamp,
+               done_at: Timestamp
+             }
+
+      assert Schema.defaults(schema) == %{
+               title: nil,
+               description: nil,
+               url: nil,
+               priority: 2,
+               done: false,
+               inserted_at: nil,
+               done_at: nil
+             }
+    end
+  end
+
+  describe "where a field belongs" do
+    test "a field says whether it is asked for and whether it is a column" do
+      json = """
+      {"name": "t", "fields": [
+        {"name": "a"},
+        {"name": "b", "list": false},
+        {"name": "c", "type": "datetime", "form": false}
+      ]}
+      """
+
+      {:ok, schema} = Schema.parse(json)
+
+      assert Enum.map(Schema.form_fields(schema), & &1.name) == ["a", "b"]
+      assert Enum.map(Schema.list_fields(schema), & &1.name) == ["a", "c"]
+      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["b"]
+    end
+
+    test "a schema names the column its list starts sorted by" do
+      json = ~s({"name": "t", "sort": "b", "fields": [{"name": "a"}, {"name": "b"}]})
+      assert {:ok, %Schema{sort: :b}} = Schema.parse(json)
+
+      json = ~s({"name": "t", "sort": "z", "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the sort of "t" is not one of its fields: "z")
+    end
+  end
+
+  describe "the timestamp type" do
+    test "casts what a record and a form can hold" do
+      assert Timestamp.cast("2026-09-19T19:26:18Z") == {:ok, "2026-09-19T19:26:18Z"}
+      assert Timestamp.cast(~U[2026-09-19 19:26:18.123Z]) == {:ok, "2026-09-19T19:26:18Z"}
+      assert Timestamp.cast(nil) == {:ok, nil}
+      assert Timestamp.cast("") == {:ok, nil}
+      assert Timestamp.cast("last tuesday") == :error
+    end
+
+    test "is shown as a date and a time, and sorts as it is stored" do
+      assert Timestamp.format("2026-09-19T19:26:18Z") =~ ~r/^2026-09-19 \d\d:\d\d$/
+      assert Timestamp.format(nil) == ""
+      assert Timestamp.format("not a date") == "not a date"
+
+      assert Enum.sort(["2026-01-02T00:00:00Z", "2025-12-31T23:59:59Z"]) ==
+               ["2025-12-31T23:59:59Z", "2026-01-02T00:00:00Z"]
+    end
+
+    test "a datetime field reports what it will not take" do
+      json = ~s({"name": "t", "fields": [{"name": "at", "type": "datetime"}]})
+      {:ok, schema} = Schema.parse(json)
+
+      result = Schema.cast(schema, %{"at" => "tomorrow"})
+
+      assert messages(result, schema) == [{"At", "must be a date and time"}]
     end
   end
 
@@ -193,7 +265,19 @@ defmodule ITui.SchemaTest do
     test "reads a schema by name from the data directory" do
       assert {:ok, schema} = Schema.load("todo")
       assert schema.source == "data/records/todos.json"
-      assert Enum.map(schema.fields, & &1.name) == ["title", "priority", "done"]
+
+      assert Enum.map(schema.fields, & &1.name) ==
+               ["title", "description", "url", "priority", "done", "inserted_at", "done_at"]
+
+      assert schema.sort == :inserted_at
+
+      assert Enum.map(Schema.list_fields(schema), & &1.name) ==
+               ["title", "priority", "done", "inserted_at", "done_at"]
+
+      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
+
+      assert Enum.map(Schema.form_fields(schema), & &1.name) ==
+               ["title", "description", "url", "priority", "done"]
     end
 
     test "reads a schema from a path" do

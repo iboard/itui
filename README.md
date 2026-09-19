@@ -114,18 +114,32 @@ stores the record, so a field added to the file shows up in both:
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
+  "sort": "inserted_at",
   "fields": [
     { "name": "title", "label": "Title", "type": "string", "required": true },
+    { "name": "description", "label": "Description", "list": false },
+    { "name": "url", "label": "URL", "list": false },
     { "name": "priority", "label": "Priority", "type": "integer", "default": 2 },
-    { "name": "done", "label": "Done", "type": "boolean", "default": false }
+    { "name": "done", "label": "Done", "type": "boolean", "default": false },
+    { "name": "inserted_at", "label": "Created", "type": "datetime", "form": false },
+    { "name": "done_at", "label": "Checked off", "type": "datetime", "form": false }
   ]
 }
 ```
 
-Fields are `string`, `integer` or `boolean`; a boolean is a toggle in the form
-rather than a text field. `source` is where `ITui.Repo` keeps the records —
-a plain JSON array anyone can open in an editor. A schema with no `source` is
-a form and nothing more, which is what a command's arguments need.
+Fields are `string`, `integer`, `boolean` or `datetime`. A boolean is a toggle
+in the form and a `[x]` in the list; a datetime is stored as ISO 8601 in UTC —
+which sorts chronologically — and shown in local time.
+
+Two flags say where a field belongs. `"list": false` keeps it out of the
+columns and shows it beside the list instead, which is where a description and
+a link belong; `"form": false` means it is never asked for, which is what a
+timestamp the application writes itself needs. `sort` names the column the
+list starts sorted by.
+
+`source` is where `ITui.Repo` keeps the records — a plain JSON array anyone can
+open in an editor. A schema with no `source` is a form and nothing more, which
+is what a command's arguments need.
 
 Records go through one interface, `ITui.Repo`, with the adapter behind it named
 in the configuration:
@@ -164,6 +178,22 @@ is not a dependency, and nothing here talks to one.
 `data/schemas/todo.json` and the `Todos` menu entry are the whole application:
 `a` adds, `enter` edits, `space` marks one done, `d` then `y` deletes, `r`
 re-reads the file. Nothing in `ITui.Views.Todo` mentions a title or a priority.
+
+The list is a table of whatever columns the schema declares, and `←`/`→` move
+the sort from one column to the next, `s` turning it the other way up. A column
+too wide for the terminal is dropped rather than half-drawn, so the sort is
+named in the summary line as well as marked in the header.
+
+```
+ 3 todos, 1 done                                       sorted by Created ▲
+   Title                     Priority    Done    Created           Checked off
+   Write the Ecto repo layer        1    [ ]     2026-09-19 21:59
+ ▸ Buy milk                         3    [x]     2026-09-19 21:59  2026-09-19 22:04
+ Description: 2 litres, the blue one
+```
+
+Ticking one off writes the moment it happened into `done_at`, and unticking it
+takes the date away again.
 
 ### Forms for a command
 

@@ -7,12 +7,19 @@ defmodule ITui.Views.Todo do
   here mentions a title or a priority, so a field added to the schema file
   shows up in the list and in the form without a line of code changing.
 
+  A field marked `"list": false` is shown beside the list rather than in it,
+  which is where a description and a link belong; a field marked
+  `"form": false` is never asked for, which is what a timestamp the
+  application writes itself needs.
+
   Records go through `ITui.Repo`, which keeps them in the JSON file the schema
   names as its source.
 
   ## Keys
 
     * `↑`/`↓` or `k`/`j` — move
+    * `←`/`→` — sort by the column to the left, or to the right
+    * `s` — the same column, the other way up
     * `a` — add, `e` or `enter` — edit
     * `space` — done, or not
     * `d` then `y` — delete
@@ -24,8 +31,14 @@ defmodule ITui.Views.Todo do
 
   alias Atui.{Layout, Style, Text}
   alias ITui.{Repo, Schema}
-  alias ITui.Schema.Field
+  alias ITui.Schema.{Boolean, Field, Timestamp}
   alias ITui.Views.{Form, Popup}
+
+  # Two columns of room for the cursor, and one of air after it.
+  @indent 3
+  @gap 2
+  @max_column 24
+  @min_flexible 10
 
   @impl Atui.View
   def mount(opts) do
@@ -37,6 +50,7 @@ defmodule ITui.Views.Todo do
        notify: Keyword.get(opts, :notify),
        todos: [],
        cursor: 0,
+       sort: first_sort(schema),
        editing: nil,
        confirming: nil,
        error: error
@@ -66,6 +80,9 @@ defmodule ITui.Views.Todo do
 
   def handle_key(key, state) when key in [:up, {:char, "k"}], do: {:ok, move(state, -1)}
   def handle_key(key, state) when key in [:down, {:char, "j"}], do: {:ok, move(state, 1)}
+  def handle_key(:left, state), do: {:ok, sort_by(state, -1)}
+  def handle_key(:right, state), do: {:ok, sort_by(state, 1)}
+  def handle_key({:char, "s"}, state), do: {:ok, reverse(state)}
   def handle_key({:char, "r"}, state), do: {:ok, reload(state)}
   def handle_key({:char, "a"}, state), do: add(state)
 
@@ -87,14 +104,19 @@ defmodule ITui.Views.Todo do
 
   @impl Atui.View
   def render(state, rect) do
-    {header, rest} = rect |> Rect.inset(1) |> Layout.split_top(2)
-    {list, footer} = Layout.split_bottom(rest, 1)
+    {head, rest} = rect |> Rect.inset(1) |> Layout.split_top(2)
+    {list, foot} = Layout.split_bottom(rest, 2)
+    # A column of air at each end: the cursor's, and one before the border.
+    columns = columns(state, list.width - @indent - 1)
 
     Screen.new(rect.width, rect.height)
     |> Screen.box(rect, title: " #{title(state)} ", style: Style.new(fg: :bright_black))
-    |> Screen.put_text(header.x + 1, header.y, summary(state), Style.new(bold: true))
-    |> body(state, list)
-    |> Screen.put_text(footer.x + 1, footer.y, footer(state, footer.width - 2), dim())
+    |> Screen.put_text(head.x + 1, head.y, summary(state), Style.new(bold: true))
+    |> sorted_by(state, head)
+    |> header(state, columns, %{head | y: head.y + 1})
+    |> body(state, columns, list)
+    |> Screen.put_text(foot.x + 1, foot.y, detail(state, foot.width - 2), dim())
+    |> Screen.put_text(foot.x + 1, foot.y + 1, keys(state, foot.width - 2), dim())
   end
 
   @impl Atui.View
@@ -130,7 +152,105 @@ defmodule ITui.Views.Todo do
   defp plural(1), do: "todo"
   defp plural(_count), do: "todos"
 
-  defp body(screen, %{error: error}, rect) when is_binary(error) do
+  # Named here as well as marked in the header, because a narrow terminal may
+  # have dropped the column it is sorted by.
+  defp sorted_by(screen, %{schema: nil}, _rect), do: screen
+  defp sorted_by(screen, %{error: error}, _rect) when is_binary(error), do: screen
+  defp sorted_by(screen, %{sort: %{by: nil}}, _rect), do: screen
+
+  defp sorted_by(screen, state, rect) do
+    case Schema.field(state.schema, state.sort.by) do
+      nil ->
+        screen
+
+      field ->
+        note = "sorted by " <> field.label <> marker(state, field)
+
+        if String.length(summary(state)) + String.length(note) + 3 <= rect.width,
+          do: Screen.put_text_right(screen, rect, rect.y, note, dim(), 1),
+          else: screen
+    end
+  end
+
+  ## Columns
+
+  # Every column takes what its widest value needs; the first text column
+  # takes whatever is left over, because that is the one with something to say.
+  defp columns(%{schema: nil}, _width), do: []
+
+  defp columns(state, width) do
+    state.schema |> Schema.list_fields() |> fit(state.todos, width)
+  end
+
+  # A column that will not fit is not shown at all: half a column of dates is
+  # worse than none, and the sort is named in the summary either way.
+  defp fit([], _todos, _width), do: []
+
+  defp fit(fields, todos, width) do
+    widths = Enum.map(fields, &natural_width(&1, todos))
+    room = width - @gap * (length(fields) - 1)
+    widths = stretch(widths, flexible(fields), room - Enum.sum(widths))
+
+    if Enum.sum(widths) > room and length(fields) > 1 do
+      fit(Enum.drop(fields, -1), todos, width)
+    else
+      place(fields, widths, width)
+    end
+  end
+
+  defp place(fields, widths, budget) do
+    fields
+    |> Enum.zip(widths)
+    |> Enum.reduce({[], 0}, fn {field, column}, {columns, x} ->
+      column = min(column, max(budget - x, 0))
+
+      {[{field, x, column} | columns], x + column + @gap}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  # A date column keeps its width whether or not there is a date in it yet, so
+  # the table does not jump about when one is ticked off.
+  defp natural_width(%Field{type: Timestamp} = field, _todos) do
+    max(String.length(field.label) + 2, Timestamp.width())
+  end
+
+  defp natural_width(field, todos) do
+    todos
+    |> Enum.map(&String.length(cell(field, &1)))
+    |> Enum.max(fn -> 0 end)
+    |> max(String.length(field.label) + 2)
+    |> min(@max_column)
+  end
+
+  defp flexible(fields), do: Enum.find_index(fields, &(&1.type == :string))
+
+  defp stretch(widths, nil, _slack), do: widths
+
+  defp stretch(widths, index, slack) do
+    List.update_at(widths, index, &max(&1 + slack, @min_flexible))
+  end
+
+  defp header(screen, %{schema: nil}, _columns, _rect), do: screen
+
+  defp header(screen, state, columns, rect) do
+    Enum.reduce(columns, screen, fn {field, x, width}, acc ->
+      Screen.put_text(acc, rect.x + @indent + x, rect.y, heading(state, field, width), dim())
+    end)
+  end
+
+  defp heading(state, field, width) do
+    Screen.truncate(field.label <> marker(state, field), width)
+  end
+
+  defp marker(%{sort: %{by: key, direction: :asc}}, %{key: key}), do: " ▲"
+  defp marker(%{sort: %{by: key}}, %{key: key}), do: " ▼"
+  defp marker(_state, _field), do: ""
+
+  ## The list
+
+  defp body(screen, %{error: error}, _columns, rect) when is_binary(error) do
     error
     |> Text.wrap(max(rect.width - 2, 1))
     |> Enum.with_index(rect.y)
@@ -139,62 +259,158 @@ defmodule ITui.Views.Todo do
     end)
   end
 
-  defp body(screen, %{todos: []}, rect) do
+  defp body(screen, %{todos: []}, _columns, rect) do
     Screen.put_text(screen, rect.x + 1, rect.y, "nothing to do yet — press a to add one", dim())
   end
 
-  defp body(screen, state, rect) do
+  defp body(screen, state, columns, rect) do
     state.todos
     |> Enum.with_index()
     |> Enum.take(max(rect.height, 0))
     |> Enum.reduce(screen, fn {todo, index}, acc ->
-      row(acc, state, todo, %{rect | y: rect.y + index, height: 1}, index == state.cursor)
+      row(acc, columns, todo, %{rect | y: rect.y + index, height: 1}, index == state.cursor)
     end)
   end
 
-  defp row(screen, state, todo, rect, selected?) do
+  defp row(screen, columns, todo, rect, selected?) do
     style = if selected?, do: Style.new(fg: :black, bg: :bright_cyan)
-    marker = if selected?, do: "▸ ", else: "  "
-    box = if done?(todo), do: "[x] ", else: "[ ] "
-    title = Screen.truncate(to_string(todo[:title]), max(rect.width - 12, 1))
 
     screen
     |> Screen.fill(rect, " ", style)
-    |> Screen.put_text(rect.x + 1, rect.y, marker <> box <> title, title_style(todo, style))
-    |> Screen.put_text_right(rect, rect.y, extra(state, todo), style || dim(), 2)
+    |> Screen.put_text(rect.x + 1, rect.y, if(selected?, do: "▸", else: " "), style)
+    |> cells(columns, todo, rect, style)
   end
 
-  # A todo that is done is not gone, but it should stop shouting.
-  defp title_style(todo, nil), do: if(done?(todo), do: dim())
-  defp title_style(_todo, style), do: style
+  defp cells(screen, columns, todo, rect, style) do
+    Enum.reduce(columns, screen, fn {field, x, width}, acc ->
+      text = Screen.truncate(cell(field, todo), width)
+      x = rect.x + @indent + x + offset(field, text, width)
 
-  # Whatever the schema declares beyond the two columns the list draws itself.
-  defp extra(%{schema: schema}, todo) do
-    schema.fields
-    |> Enum.reject(&(&1.name in ["title", "done"]))
-    |> Enum.map_join("  ", fn field ->
-      "#{field.label}: #{Field.format(field, todo[field.key])}"
+      Screen.put_text(acc, x, rect.y, text, style || value_style(field, todo))
     end)
   end
 
-  defp footer(%{confirming: id} = state, width) when not is_nil(id) do
+  # A number reads as a column when it ends where the others end.
+  defp offset(%Field{type: :integer}, text, width), do: max(width - String.length(text), 0)
+  defp offset(_field, _text, _width), do: 0
+
+  # A todo that is done is not gone, but it should stop shouting.
+  defp value_style(%Field{type: :string}, todo), do: if(done?(todo), do: dim())
+  defp value_style(_field, _todo), do: nil
+
+  defp cell(%Field{type: Boolean} = field, todo) do
+    if todo[field.key] == true, do: "[x]", else: "[ ]"
+  end
+
+  defp cell(field, todo), do: Field.format(field, todo[field.key])
+
+  ## What does not fit in a column
+
+  defp detail(%{schema: nil}, _width), do: ""
+
+  defp detail(%{confirming: id} = state, width) when not is_nil(id) do
     title = state.todos |> Enum.find(&(&1[:id] == id)) |> Kernel.||(%{}) |> Map.get(:title, "")
 
     Screen.truncate(~s(delete "#{title}"? y / n), width)
   end
 
-  defp footer(%{error: error}, _width) when is_binary(error), do: "esc back"
+  defp detail(state, width) do
+    case current(state) do
+      nil ->
+        ""
 
-  defp footer(_state, width) do
+      todo ->
+        state.schema
+        |> Schema.detail_fields()
+        |> Enum.map(fn field -> {field, Field.format(field, todo[field.key])} end)
+        |> Enum.reject(fn {_field, value} -> value == "" end)
+        |> Enum.map_join(" · ", fn {field, value} -> "#{field.label}: #{value}" end)
+        |> Screen.truncate(width)
+    end
+  end
+
+  defp keys(%{error: error}, _width) when is_binary(error), do: "esc back"
+
+  defp keys(_state, width) do
     Text.first_fitting(
       [
-        "a add · enter edit · space done · d delete · r reload · esc back",
-        "a add · enter edit · space done · d delete · esc back",
-        "a · enter · space · d · esc"
+        "a add · enter edit · space done · d delete · ←→ sort · s reverse · esc back",
+        "a add · enter edit · space done · d delete · ←→ sort · esc back",
+        "a · enter · space · d · ←→ · esc"
       ],
       width
     )
   end
+
+  ## Sorting
+
+  defp first_sort(nil), do: %{by: nil, direction: :asc}
+
+  defp first_sort(schema) do
+    case Schema.list_fields(schema) do
+      [] -> %{by: nil, direction: :asc}
+      [first | _rest] -> %{by: schema.sort || first.key, direction: :asc}
+    end
+  end
+
+  defp sort_by(%{schema: nil} = state, _by), do: state
+
+  defp sort_by(state, by) do
+    fields = Schema.list_fields(state.schema)
+
+    case Enum.find_index(fields, &(&1.key == state.sort.by)) do
+      nil ->
+        state
+
+      index ->
+        field = Enum.at(fields, Integer.mod(index + by, length(fields)))
+
+        resort(%{state | sort: %{state.sort | by: field.key}})
+    end
+  end
+
+  defp reverse(state) do
+    resort(%{state | sort: %{state.sort | direction: other(state.sort.direction)}})
+  end
+
+  defp other(:asc), do: :desc
+  defp other(:desc), do: :asc
+
+  # The cursor follows the todo it was on, rather than the place it was in.
+  defp resort(state) do
+    todos = sorted(state, state.todos)
+    cursor = Enum.find_index(todos, &(&1 == current(state))) || state.cursor
+
+    %{state | todos: todos, cursor: clamp(cursor, todos)}
+  end
+
+  defp sorted(%{sort: %{by: nil}}, todos), do: todos
+
+  defp sorted(state, todos) do
+    case Schema.field(state.schema, state.sort.by) do
+      nil -> todos
+      field -> Enum.sort(todos, &before?(key(field, &1), key(field, &2), state.sort.direction))
+    end
+  end
+
+  defp key(%Field{type: :string} = field, todo) do
+    case todo[field.key] do
+      value when is_binary(value) -> String.downcase(value)
+      value -> value
+    end
+  end
+
+  defp key(field, todo), do: todo[field.key]
+
+  # Whichever way up the column is, a todo that has no value for it goes last:
+  # an empty cell is not a small one.
+  defp before?(nil, nil, _direction), do: true
+  defp before?(nil, _second, _direction), do: false
+  defp before?(_first, nil, _direction), do: true
+  defp before?(first, second, :asc), do: first <= second
+  defp before?(first, second, :desc), do: first >= second
+
+  ## Changing things
 
   defp add(%{schema: nil} = state), do: {:ok, state}
 
@@ -214,11 +430,13 @@ defmodule ITui.Views.Todo do
   end
 
   defp save(%{editing: :new} = state, attrs) do
-    state.schema |> Repo.insert(params(state, attrs)) |> handled(state)
+    state.schema |> Repo.insert(params(state, attrs, nil)) |> handled(state)
   end
 
   defp save(%{editing: id} = state, attrs) when is_integer(id) do
-    state.schema |> Repo.update(id, params(state, attrs)) |> handled(state)
+    previous = Enum.find(state.todos, &(&1[:id] == id))
+
+    state.schema |> Repo.update(id, params(state, attrs, previous)) |> handled(state)
   end
 
   defp save(state, _attrs), do: state
@@ -226,13 +444,29 @@ defmodule ITui.Views.Todo do
   defp toggle(state, nil), do: state
 
   defp toggle(state, todo) do
-    state.schema |> Repo.update(todo[:id], %{"done" => not done?(todo)}) |> handled(state)
+    params = params(state, %{done: not done?(todo)}, todo)
+
+    state.schema |> Repo.update(todo[:id], params) |> handled(state)
   end
 
-  # The form hands back a record; the repository casts parameters, which are
-  # named the way a form names them.
-  defp params(state, attrs) do
-    Map.new(state.schema.fields, fn field -> {field.name, Map.get(attrs, field.key)} end)
+  # The repository casts parameters, which are named the way a form names them.
+  defp params(state, attrs, previous) do
+    attrs
+    |> Map.new(fn {key, value} -> {to_string(key), value} end)
+    |> checked_off(state, previous)
+  end
+
+  # "Checked off" is the moment the tick went in, so it is written when the
+  # tick changes and taken away again when it is unticked.
+  defp checked_off(params, state, previous) do
+    done = params["done"]
+
+    cond do
+      is_nil(Schema.field(state.schema, :done_at)) -> params
+      is_nil(done) or done == (previous && done?(previous)) -> params
+      done -> Map.put(params, "done_at", Timestamp.now())
+      true -> Map.put(params, "done_at", nil)
+    end
   end
 
   defp delete(state, id) do
@@ -258,8 +492,13 @@ defmodule ITui.Views.Todo do
 
   defp reload(state) do
     case Repo.all(state.schema) do
-      {:ok, todos} -> %{state | todos: todos, error: nil, cursor: clamp(state.cursor, todos)}
-      {:error, reason} -> %{state | error: message(state, reason)}
+      {:ok, todos} ->
+        todos = sorted(state, todos)
+
+        %{state | todos: todos, error: nil, cursor: clamp(state.cursor, todos)}
+
+      {:error, reason} ->
+        %{state | error: message(state, reason)}
     end
   end
 

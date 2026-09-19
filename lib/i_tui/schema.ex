@@ -19,7 +19,8 @@ defmodule ITui.Schema do
       }
 
   `label` names one record and titles the form that edits it; `title` names the
-  collection and heads the list of them, defaulting to `label`. `source` is
+  collection and heads the list of them, defaulting to `label`. `sort` names
+  the column the list starts sorted by. `source` is
   where `ITui.Repo` keeps the records, and only matters for a schema that is
   stored; a form collecting the arguments of a command has no source at all.
 
@@ -48,13 +49,14 @@ defmodule ITui.Schema do
   alias Ecto.Changeset
   alias ITui.Schema.Field
 
-  defstruct [:name, :label, :title, :source, fields: []]
+  defstruct [:name, :label, :title, :source, :sort, fields: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
           label: String.t(),
           title: String.t(),
           source: Path.t() | nil,
+          sort: atom() | nil,
           fields: [Field.t()]
         }
 
@@ -103,7 +105,8 @@ defmodule ITui.Schema do
   @spec from_map(map()) :: {:ok, t()} | {:error, String.t()}
   def from_map(%{"fields" => fields} = map) when is_list(fields) do
     with {:ok, name} <- name(map),
-         {:ok, fields} <- parse_fields(fields, name) do
+         {:ok, fields} <- parse_fields(fields, name),
+         {:ok, sort} <- sort(map, fields, name) do
       label = label(map, name)
 
       {:ok,
@@ -112,6 +115,7 @@ defmodule ITui.Schema do
          label: label,
          title: title(map, label),
          source: source(map, name),
+         sort: sort,
          fields: fields
        }}
     end
@@ -188,9 +192,9 @@ defmodule ITui.Schema do
   @doc """
   The Ecto type of every field, which is what `Ecto.Changeset.cast/4` needs.
 
-      iex> {:ok, schema} = ITui.Schema.load("todo")
+      iex> {:ok, schema} = ITui.Schema.parse(~s({"name": "t", "fields": [{"name": "n", "type": "integer"}]}))
       iex> ITui.Schema.types(schema)
-      %{title: :string, priority: :integer, done: ITui.Schema.Boolean}
+      %{n: :integer}
 
   """
   @spec types(t()) :: %{atom() => Ecto.Type.t()}
@@ -215,6 +219,24 @@ defmodule ITui.Schema do
 
     Enum.filter(fields, &(&1.name in names))
   end
+
+  @doc """
+  The fields a form asks for — everything the schema does not keep to itself.
+  """
+  @spec form_fields(t()) :: [Field.t()]
+  def form_fields(%__MODULE__{fields: fields}), do: Enum.filter(fields, & &1.form)
+
+  @doc """
+  The fields a list gives a column to.
+  """
+  @spec list_fields(t()) :: [Field.t()]
+  def list_fields(%__MODULE__{fields: fields}), do: Enum.filter(fields, & &1.list)
+
+  @doc """
+  The fields a list shows beside itself rather than in a column.
+  """
+  @spec detail_fields(t()) :: [Field.t()]
+  def detail_fields(%__MODULE__{fields: fields}), do: Enum.reject(fields, & &1.list)
 
   @doc """
   The field called `name`, or `nil`. The name may be a string or an atom.
@@ -300,6 +322,20 @@ defmodule ITui.Schema do
 
   defp source(%{"source" => source}, _name) when is_binary(source), do: source
   defp source(_map, _name), do: nil
+
+  # The column a list starts sorted by, named rather than guessed.
+  defp sort(%{"sort" => sort}, fields, name) when is_binary(sort) do
+    case Enum.find(fields, &(&1.name == sort)) do
+      nil -> {:error, ~s(the sort of "#{name}" is not one of its fields: #{inspect(sort)})}
+      field -> {:ok, field.key}
+    end
+  end
+
+  defp sort(%{"sort" => sort}, _fields, name) when not is_nil(sort) do
+    {:error, ~s(the sort of "#{name}" must be a field name, got: #{inspect(sort)})}
+  end
+
+  defp sort(_map, _fields, _name), do: {:ok, nil}
 
   defp data_dir, do: Application.get_env(:i_tui, :data_dir, "data")
 end

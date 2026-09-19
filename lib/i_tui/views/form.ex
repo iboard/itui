@@ -12,7 +12,9 @@ defmodule ITui.Views.Form do
   yes/no question deserves less than a text field.
 
   Nothing is submitted until every field casts: `enter` shows all of the
-  mistakes at once and stays open, so a form is never half-accepted.
+  mistakes at once and stays open, so a form is never half-accepted. A field
+  the schema marks `"form": false` is not asked for and not answered for —
+  a timestamp the application writes itself is nobody's to type.
 
   ## Keys
 
@@ -41,7 +43,7 @@ defmodule ITui.Views.Form do
        schema: schema,
        title: Keyword.get(opts, :title, schema.label),
        notify: Keyword.get(opts, :notify),
-       widgets: Enum.map(schema.fields, &widget(&1, values)),
+       widgets: schema |> Schema.form_fields() |> Enum.map(&widget(&1, values)),
        focus: 0,
        errors: [],
        result: :cancelled
@@ -153,10 +155,14 @@ defmodule ITui.Views.Form do
     )
   end
 
+  # Only the fields that were drawn are cast, and only they come back: a
+  # schema keeps some things to itself, and a form must not answer for them.
   defp submit(state) do
-    case Schema.cast(state.schema, params(state)) do
+    shown = Enum.map(state.widgets, & &1.field)
+
+    case Schema.cast(state.schema, params(state), Enum.map(shown, & &1.name)) do
       {:ok, attrs} ->
-        {:pop, %{state | result: {:submitted, attrs}}}
+        {:pop, %{state | result: {:submitted, Map.take(attrs, Enum.map(shown, & &1.key))}}}
 
       {:error, changeset} ->
         errors = Schema.errors(state.schema, changeset)

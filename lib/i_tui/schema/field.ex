@@ -16,16 +16,33 @@ defmodule ITui.Schema.Field do
       {
         "name": "title",          // required: the key in the record
         "label": "Title",         // optional: what the form calls it
-        "type": "string",         // string (default), integer or boolean
+        "type": "string",         // string (default), integer, boolean, datetime
         "required": true,         // optional
         "default": "",            // optional: the value before anything is typed
-        "placeholder": "what to do"
+        "placeholder": "what to do",
+        "form": false,            // optional: keep it out of the form
+        "list": false             // optional: keep it out of the list's columns
       }
+
+  `form` and `list` are what a field says about where it belongs. A timestamp
+  the application writes itself is `"form": false` — there is nothing to ask —
+  and a long piece of prose is `"list": false`, because a column is no place
+  for it.
   """
 
-  alias ITui.Schema.Boolean
+  alias ITui.Schema.{Boolean, Timestamp}
 
-  defstruct [:name, :key, :label, :default, :placeholder, type: :string, required: false]
+  defstruct [
+    :name,
+    :key,
+    :label,
+    :default,
+    :placeholder,
+    type: :string,
+    required: false,
+    form: true,
+    list: true
+  ]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -34,10 +51,17 @@ defmodule ITui.Schema.Field do
           type: Ecto.Type.t(),
           required: boolean(),
           default: term(),
-          placeholder: String.t() | nil
+          placeholder: String.t() | nil,
+          form: boolean(),
+          list: boolean()
         }
 
-  @types %{"string" => :string, "integer" => :integer, "boolean" => Boolean}
+  @types %{
+    "string" => :string,
+    "integer" => :integer,
+    "boolean" => Boolean,
+    "datetime" => Timestamp
+  }
 
   @doc """
   Parses one decoded JSON object into a field.
@@ -54,7 +78,9 @@ defmodule ITui.Schema.Field do
         label: label(map, name),
         type: type,
         required: map["required"] == true,
-        placeholder: placeholder(map)
+        placeholder: placeholder(map),
+        form: map["form"] != false,
+        list: map["list"] != false
       }
 
       default(field, map)
@@ -85,6 +111,7 @@ defmodule ITui.Schema.Field do
   @spec invalid_message(Ecto.Type.t()) :: String.t() | nil
   def invalid_message(:integer), do: "must be a whole number"
   def invalid_message(Boolean), do: "must be yes or no"
+  def invalid_message(Timestamp), do: "must be a date and time"
   def invalid_message(_type), do: nil
 
   @doc """
@@ -98,6 +125,7 @@ defmodule ITui.Schema.Field do
   @spec format(t(), term()) :: String.t()
   def format(%__MODULE__{type: Boolean}, true), do: "yes"
   def format(%__MODULE__{type: Boolean}, _value), do: "no"
+  def format(%__MODULE__{type: Timestamp}, value), do: Timestamp.format(value)
   def format(%__MODULE__{}, nil), do: ""
   def format(%__MODULE__{}, value), do: to_string(value)
 
