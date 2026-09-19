@@ -117,6 +117,7 @@ stores the record, so a field added to the file shows up in both:
   "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
   "sort": "id",
   "stretch": "description",
+  "detail": ["description", "url"],
   "fields": [
     { "name": "title", "label": "Title", "type": "string", "required": true },
     { "name": "description", "label": "Description", "lines": 4 },
@@ -140,6 +141,12 @@ a different order from the form that fills it, and a field left out of them is
 shown beside the list instead, which is where a link belongs. Leave `columns`
 out and every field gets one, in the order they are declared. `stretch` names
 the column that takes whatever width the others leave over, and is cut to fit.
+
+`detail` says outright which fields are shown beside the list, for the row the
+cursor is on — a column too narrow to read is worth repeating in full down
+there, which is what the description does. Each gets a row of its own, kept
+whether or not there is anything in it, so the list does not shuffle up and
+down as the cursor moves.
 `"form": false` on a field means it is never asked for, which is what a serial
 number and a timestamp the application writes itself need. `sort` names the
 column the list starts sorted by.
@@ -207,7 +214,8 @@ header.
  ──────┼────────┼─────┼────────────┼────────────┼─────────────────────┼─────────────
  ▸   2 │ [x]    │   1 │ 2026-09-19 │ 2026-09-19 │ scheissn geh        │ how can I wr
      3 │ [ ]    │   5 │ 2026-09-19 │            │ publish iTUI to HEX │
- URL: https://hex.pm/packages/i_tui
+ Description: how can I write multiple line inputs and how to edit them
+ URL: https://iboard.cc
 ```
 
 Ticking one off writes the moment it happened into `done_at`, and unticking it

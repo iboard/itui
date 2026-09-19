@@ -6,6 +6,7 @@
   "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
   "sort": "id",
   "stretch": "description",
+  "detail": ["description", "url"],
   "fields": [
     {
       "name": "title",

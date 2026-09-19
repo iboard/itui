@@ -238,6 +238,14 @@ defmodule ITui.Views.TodoTest do
     end
   end
 
+  test "a row is kept for each thing shown beside the list, full or empty", %{ui: ui} do
+    add(ui, "No description")
+
+    # The list does not shuffle about as the cursor moves over an empty one.
+    assert text(ui) =~ "a add · enter edit"
+    refute text(ui) =~ "Description:"
+  end
+
   test "what does not fit in a column is shown beside the list", %{ui: ui} do
     add(ui, "Write the docs")
     press(ui, :enter)
@@ -309,6 +317,7 @@ defmodule ITui.Views.TodoStretchTest do
 
   @schema """
   {"name": "note", "label": "Note", "columns": ["id", "title", "body"], "stretch": "body",
+   "detail": ["body"],
    "fields": [
     {"name": "title", "label": "Title", "required": true},
     {"name": "body", "label": "Body", "lines": 3},
@@ -349,6 +358,16 @@ defmodule ITui.Views.TodoStretchTest do
 
     assert String.length(body_column(ui)) > 40
     assert body_column(ui) =~ "a body long enough"
+  end
+
+  test "a column can be repeated in full beside the list", %{schema: schema} do
+    ui = start_ui(Todo, schema: schema, size: {46, 10})
+    lines = ui |> text() |> String.split("\r\n")
+
+    detail = Enum.find(lines, "", &(&1 =~ "Body:"))
+
+    assert detail =~ "Body: a body long enough"
+    assert String.length(body_column(ui)) < String.length(detail)
   end
 
   test "and gives it back when there is less of it", %{schema: schema} do

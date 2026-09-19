@@ -208,6 +208,29 @@ defmodule ITui.SchemaTest do
       assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["b"]
     end
 
+    test "a schema can name what is shown beside the list, column or not" do
+      json = """
+      {"name": "t", "columns": ["a", "b"], "detail": ["b", "c"], "fields": [
+        {"name": "a"}, {"name": "b"}, {"name": "c"}
+      ]}
+      """
+
+      {:ok, schema} = Schema.parse(json)
+
+      assert Enum.map(Schema.list_fields(schema), & &1.name) == ["a", "b"]
+      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["b", "c"]
+    end
+
+    test "rejects a detail that is not made of fields" do
+      json = ~s({"name": "t", "detail": ["z"], "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the detail of "t" name something that is not a field: "z")
+
+      json = ~s({"name": "t", "detail": "a", "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the detail of "t" must be a list of field names)
+    end
+
     test "every field is a column when the schema does not say otherwise" do
       {:ok, schema} = Schema.parse(~s({"name": "t", "fields": [{"name": "a"}, {"name": "b"}]}))
 
@@ -324,7 +347,8 @@ defmodule ITui.SchemaTest do
       assert Field.multiline?(Schema.field(schema, :description))
       refute Field.multiline?(Schema.field(schema, :title))
 
-      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["url"]
+      # Description is a column and is repeated in full beside the list.
+      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
 
       assert Enum.map(Schema.form_fields(schema), & &1.name) ==
                ["title", "description", "url", "priority", "done"]

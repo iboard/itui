@@ -42,6 +42,8 @@ defmodule ITui.Views.Todo do
   @gap 3
   @max_column 24
   @min_flexible 6
+  # However many the schema names, a list is a list and not a report.
+  @max_detail 3
 
   @impl Atui.View
   def mount(opts) do
@@ -108,7 +110,8 @@ defmodule ITui.Views.Todo do
   @impl Atui.View
   def render(state, rect) do
     {head, rest} = rect |> Rect.inset(1) |> Layout.split_top(3)
-    {list, foot} = Layout.split_bottom(rest, 2)
+    rows = detail_rows(state)
+    {list, foot} = Layout.split_bottom(rest, rows + 1)
     # A column of air at each end: the cursor's, and one before the border.
     columns = columns(state, list.width - @indent - 1)
 
@@ -119,8 +122,8 @@ defmodule ITui.Views.Todo do
     |> header(state, columns, %{head | y: head.y + 1})
     |> rule(state, columns, %{head | y: head.y + 2})
     |> body(state, columns, list)
-    |> Screen.put_text(foot.x + 1, foot.y, detail(state, foot.width - 2), dim())
-    |> Screen.put_text(foot.x + 1, foot.y + 1, keys(state, foot.width - 2), dim())
+    |> details(state, %{foot | height: rows})
+    |> Screen.put_text(foot.x + 1, foot.y + rows, keys(state, foot.width - 2), dim())
   end
 
   @impl Atui.View
@@ -343,26 +346,53 @@ defmodule ITui.Views.Todo do
 
   ## What does not fit in a column
 
-  defp detail(%{schema: nil}, _width), do: ""
+  # A row apiece, kept whether or not there is anything in them, so the list
+  # above does not shuffle up and down as the cursor moves.
+  defp detail_rows(%{schema: nil}), do: 0
 
-  defp detail(%{confirming: id} = state, width) when not is_nil(id) do
+  defp detail_rows(state),
+    do: state.schema |> Schema.detail_fields() |> length() |> min(@max_detail)
+
+  defp details(screen, _state, %{height: 0}), do: screen
+
+  defp details(screen, %{confirming: id} = state, rect) when not is_nil(id) do
     title = state.todos |> Enum.find(&(&1[:id] == id)) |> Kernel.||(%{}) |> Map.get(:title, "")
 
-    Screen.truncate(~s(delete "#{title}"? y / n), width)
+    Screen.put_text(
+      screen,
+      rect.x + 1,
+      rect.y,
+      Screen.truncate(~s(delete "#{title}"? y / n), rect.width - 2),
+      dim()
+    )
   end
 
-  defp detail(state, width) do
+  defp details(screen, state, rect) do
+    state
+    |> detail_lines()
+    |> Enum.take(rect.height)
+    |> Enum.with_index(rect.y)
+    |> Enum.reduce(screen, fn {line, y}, acc ->
+      Screen.put_text(acc, rect.x + 1, y, Screen.truncate(line, rect.width - 2), dim())
+    end)
+  end
+
+  defp detail_lines(%{error: error}) when is_binary(error), do: []
+
+  defp detail_lines(state) do
     case current(state) do
       nil ->
-        ""
+        []
 
       todo ->
         state.schema
         |> Schema.detail_fields()
-        |> Enum.map(fn field -> {field, one_line(Field.format(field, todo[field.key]))} end)
-        |> Enum.reject(fn {_field, value} -> value == "" end)
-        |> Enum.map_join(" · ", fn {field, value} -> "#{field.label}: #{value}" end)
-        |> Screen.truncate(width)
+        |> Enum.map(fn field ->
+          case one_line(Field.format(field, todo[field.key])) do
+            "" -> ""
+            value -> "#{field.label}: #{value}"
+          end
+        end)
     end
   end
 

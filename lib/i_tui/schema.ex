@@ -22,9 +22,10 @@ defmodule ITui.Schema do
   collection and heads the list of them, defaulting to `label`. `columns` says
   which fields the list gives a column to and in what order — a table reads in
   a different order from the form that fills it, and a field left out is shown
-  beside the list instead. `sort` names the column the list starts sorted by,
-  and `stretch` the one that takes whatever width the other columns leave over.
-  `source` is
+  beside the list instead — or `detail` says outright which fields are shown
+  there, for a column worth repeating in full. `sort` names the column the list
+  starts sorted by, and `stretch` the one that takes whatever width the other
+  columns leave over. `source` is
   where `ITui.Repo` keeps the records, and only matters for a schema that is
   stored; a form collecting the arguments of a command has no source at all.
 
@@ -53,7 +54,7 @@ defmodule ITui.Schema do
   alias Ecto.Changeset
   alias ITui.Schema.Field
 
-  defstruct [:name, :label, :title, :source, :sort, :columns, :stretch, fields: []]
+  defstruct [:name, :label, :title, :source, :sort, :columns, :detail, :stretch, fields: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -62,6 +63,7 @@ defmodule ITui.Schema do
           source: Path.t() | nil,
           sort: atom() | nil,
           columns: [atom()] | nil,
+          detail: [atom()] | nil,
           stretch: atom() | nil,
           fields: [Field.t()]
         }
@@ -112,7 +114,8 @@ defmodule ITui.Schema do
   def from_map(%{"fields" => fields} = map) when is_list(fields) do
     with {:ok, name} <- name(map),
          {:ok, fields} <- parse_fields(fields, name),
-         {:ok, columns} <- columns(map, fields, name),
+         {:ok, columns} <- name_list(map, "columns", fields, name),
+         {:ok, detail} <- name_list(map, "detail", fields, name),
          {:ok, stretch} <- named(map, "stretch", fields, name),
          {:ok, sort} <- named(map, "sort", fields, name) do
       label = label(map, name)
@@ -125,6 +128,7 @@ defmodule ITui.Schema do
          source: source(map, name),
          sort: sort,
          columns: columns,
+         detail: detail,
          stretch: stretch,
          fields: fields
        }}
@@ -250,10 +254,17 @@ defmodule ITui.Schema do
   end
 
   @doc """
-  The fields a list shows beside itself rather than in a column: the ones
-  `columns` leaves out, which is where a description or a link belongs.
+  The fields a list shows beside itself, for the row the cursor is on.
+
+  That is `detail` when the schema names them — a column too narrow to read is
+  worth repeating in full down there — and otherwise the fields `columns`
+  leaves out, which is where a description or a link belongs.
   """
   @spec detail_fields(t()) :: [Field.t()]
+  def detail_fields(%__MODULE__{detail: detail} = schema) when is_list(detail) do
+    Enum.map(detail, &field(schema, &1))
+  end
+
   def detail_fields(%__MODULE__{columns: nil}), do: []
 
   def detail_fields(%__MODULE__{columns: columns, fields: fields}) do
@@ -345,33 +356,40 @@ defmodule ITui.Schema do
   defp source(%{"source" => source}, _name) when is_binary(source), do: source
   defp source(_map, _name), do: nil
 
-  # Which fields are columns, and in what order. A field left out is shown
-  # beside the list instead.
-  defp columns(%{"columns" => columns}, fields, name) when is_list(columns) do
-    columns
-    |> Enum.reduce_while({:ok, []}, fn column, {:ok, acc} ->
-      case Enum.find(fields, &(&1.name == column)) do
+  # `columns` and `detail` each name a list of fields, in the order they are
+  # drawn: the table's columns, and what is shown beside the list.
+  defp name_list(map, key, fields, name) do
+    case Map.get(map, key) do
+      nil ->
+        {:ok, nil}
+
+      names when is_list(names) ->
+        gather(names, key, fields, name)
+
+      names ->
+        {:error,
+         ~s(the #{key} of "#{name}" must be a list of field names, got: ) <> inspect(names)}
+    end
+  end
+
+  defp gather(names, key, fields, name) do
+    names
+    |> Enum.reduce_while({:ok, []}, fn named, {:ok, acc} ->
+      case Enum.find(fields, &(&1.name == named)) do
         nil ->
           {:halt,
            {:error,
-            ~s(the columns of "#{name}" name something that is not a field: ) <>
-              inspect(column)}}
+            ~s(the #{key} of "#{name}" name something that is not a field: ) <> inspect(named)}}
 
         field ->
           {:cont, {:ok, [field.key | acc]}}
       end
     end)
     |> case do
-      {:ok, columns} -> {:ok, Enum.reverse(columns)}
+      {:ok, keys} -> {:ok, Enum.reverse(keys)}
       error -> error
     end
   end
-
-  defp columns(%{"columns" => columns}, _fields, name) when not is_nil(columns) do
-    {:error, ~s(the columns of "#{name}" must be a list of field names, got: #{inspect(columns)})}
-  end
-
-  defp columns(_map, _fields, _name), do: {:ok, nil}
 
   # `sort` and `stretch` each name one field: the column a list starts sorted
   # by, and the one that takes whatever width the others leave over.
