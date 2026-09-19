@@ -17,7 +17,7 @@ defmodule ITui.Schema.Field do
         "name": "title",          // required: the key in the record
         "label": "Title",         // optional: what the form calls it
         "short": "T",             // optional: what a column calls it
-        "type": "string",         // string (default), integer, boolean, datetime
+        "type": "string",         // string (default), integer, boolean, date, datetime
         "required": true,         // optional
         "default": "",            // optional: the value before anything is typed
         "placeholder": "what to do",
@@ -66,6 +66,7 @@ defmodule ITui.Schema.Field do
     "string" => :string,
     "integer" => :integer,
     "boolean" => Boolean,
+    "date" => ITui.Schema.Date,
     "datetime" => Timestamp
   }
 
@@ -139,6 +140,7 @@ defmodule ITui.Schema.Field do
   def invalid_message(:integer), do: "must be a whole number"
   def invalid_message(Boolean), do: "must be yes or no"
   def invalid_message(Timestamp), do: "must be a date and time"
+  def invalid_message(ITui.Schema.Date), do: "must be a date, as 2026-09-25"
   def invalid_message(_type), do: nil
 
   @doc """
@@ -153,6 +155,7 @@ defmodule ITui.Schema.Field do
   def format(%__MODULE__{type: Boolean}, true), do: "yes"
   def format(%__MODULE__{type: Boolean}, _value), do: "no"
   def format(%__MODULE__{type: Timestamp}, value), do: Timestamp.format(value)
+  def format(%__MODULE__{type: ITui.Schema.Date}, value), do: ITui.Schema.Date.format(value)
   def format(%__MODULE__{}, nil), do: ""
   def format(%__MODULE__{}, value), do: to_string(value)
 

@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A schema says which fields are shown beside the list (`"detail"`), column or
   not, each on a row of its own.
 - A date in a column is the day it fell on, without the time.
+- A `date` field type (`ITui.Schema.Date`) — a day in a calendar rather than a
+  moment in time — and a `due` field on a todo, asked for in the form and
+  given a column between Created and Checked.
+- Rows are coloured by how near their due date is: green once done, red past
+  it, yellow within two days, orange within the rest of the calendar week,
+  white otherwise.
 - The todo list is a sortable, ruled table — `←`/`→` move the sort from column
   to column, `r` turns it the other way up, `R` re-reads the file — with a
   serial number, `description` and `url` fields, a `Created` column and a

@@ -382,6 +382,126 @@ defmodule ITui.Views.TodoStretchTest do
   end
 end
 
+defmodule ITui.Views.TodoColourTest do
+  use ITui.UICase, async: false
+
+  alias ITui.{Repo, Schema}
+  alias ITui.Views.Todo
+
+  # A Monday, so that "later this week" is a day that exists.
+  @today ~D[2026-09-14]
+
+  @schema """
+  {"name": "todo", "label": "Todo", "columns": ["id", "done", "due", "title"], "sort": "id",
+   "fields": [
+    {"name": "title", "label": "Title", "required": true},
+    {"name": "due", "label": "Due", "type": "date"},
+    {"name": "done", "label": "Done", "type": "boolean", "default": false},
+    {"name": "id", "label": "#", "type": "integer", "form": false}
+  ]}
+  """
+
+  setup do
+    source = Path.join(System.tmp_dir!(), "i_tui_#{System.unique_integer([:positive])}.json")
+    on_exit(fn -> File.rm(source) end)
+
+    {:ok, schema} = Schema.parse(@schema)
+
+    %{schema: %{schema | source: source}}
+  end
+
+  defp with_todos(schema, todos) do
+    for attrs <- todos, do: {:ok, _record} = Repo.insert(schema, attrs)
+
+    start_ui(Todo, schema: schema, today: @today, size: {70, 14})
+  end
+
+  defp tones(ui) do
+    state = Runtime.view_state(ui, Todo)
+
+    Enum.map(state.todos, &{&1[:title], Todo.tone(state, &1)})
+  end
+
+  defp style(ui, row) do
+    {_grapheme, style} = ui |> Runtime.screen() |> Atui.Screen.cell(2, 4 + row)
+
+    style
+  end
+
+  test "is how near the due date is, and green once it is done", %{schema: schema} do
+    ui =
+      with_todos(schema, [
+        %{"title" => "Overdue", "due" => "2026-09-11"},
+        %{"title" => "Today", "due" => "2026-09-14"},
+        %{"title" => "In two days", "due" => "2026-09-16"},
+        %{"title" => "Later this week", "due" => "2026-09-17"},
+        %{"title" => "Sunday, the last of it", "due" => "2026-09-20"},
+        %{"title" => "Next week", "due" => "2026-09-21"},
+        %{"title" => "Whenever"},
+        %{"title" => "Done, and was overdue", "due" => "2026-09-01", "done" => true}
+      ])
+
+    assert tones(ui) == [
+             {"Overdue", :overdue},
+             {"Today", :soon},
+             {"In two days", :soon},
+             {"Later this week", :week},
+             {"Sunday, the last of it", :week},
+             {"Next week", :plain},
+             {"Whenever", :plain},
+             {"Done, and was overdue", :done}
+           ]
+  end
+
+  test "is drawn in the colour it says, cursor or no cursor", %{schema: schema} do
+    ui =
+      with_todos(schema, [
+        %{"title" => "Overdue", "due" => "2026-09-11"},
+        %{"title" => "In two days", "due" => "2026-09-16"},
+        %{"title" => "Later this week", "due" => "2026-09-17"},
+        %{"title" => "Next week", "due" => "2026-09-21"},
+        %{"title" => "Done", "done" => true}
+      ])
+
+    # The row the cursor is on keeps its colour and takes a background.
+    assert %{fg: :bright_red, bg: :bright_black, bold: true} = style(ui, 0)
+
+    assert %{fg: :bright_yellow, bg: nil} = style(ui, 1)
+    assert %{fg: 208, bg: nil} = style(ui, 2)
+    assert %{fg: :white, bg: nil} = style(ui, 3)
+    assert %{fg: :green, bg: nil} = style(ui, 4)
+
+    # Moving the cursor moves the background, not the colour.
+    press(ui, :down)
+    assert %{fg: :bright_red, bg: nil} = style(ui, 0)
+    assert %{fg: :bright_yellow, bg: :bright_black} = style(ui, 1)
+  end
+
+  test "a due date is asked for in the form, and is not required", %{schema: schema} do
+    ui = with_todos(schema, [])
+
+    press(ui, {:char, "a"})
+    type(ui, "No date for this one")
+    press(ui, :enter)
+
+    assert settle(ui) =~ "No date for this one"
+    assert Repo.all(schema) |> elem(1) |> hd() |> Map.fetch!(:due) == nil
+  end
+
+  test "a due date that is not a date is refused, and says how one looks", %{schema: schema} do
+    ui = with_todos(schema, [])
+
+    press(ui, {:char, "a"})
+    type(ui, "Some day")
+    press(ui, :tab)
+    type(ui, "next tuesday")
+    screen = press(ui, :enter)
+
+    assert screen =~ "Due must be a date, as 2026-09-25"
+    assert Repo.all(schema) == {:ok, []}
+  end
+end
+
 defmodule ITui.Views.TodoErrorTest do
   use ITui.UICase, async: false
 

@@ -114,7 +114,7 @@ stores the record, so a field added to the file shows up in both:
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
+  "columns": ["id", "done", "priority", "inserted_at", "due", "done_at", "title", "description"],
   "sort": "id",
   "stretch": "description",
   "detail": ["description", "url"],
@@ -123,6 +123,7 @@ stores the record, so a field added to the file shows up in both:
     { "name": "description", "label": "Description", "lines": 4 },
     { "name": "url", "label": "URL" },
     { "name": "priority", "label": "Priority", "short": "P", "type": "integer", "default": 2 },
+    { "name": "due", "label": "Due", "type": "date" },
     { "name": "done", "label": "Done", "type": "boolean", "default": false },
     { "name": "id", "label": "#", "type": "integer", "form": false },
     { "name": "inserted_at", "label": "Created", "type": "datetime", "form": false },
@@ -131,10 +132,13 @@ stores the record, so a field added to the file shows up in both:
 }
 ```
 
-Fields are `string`, `integer`, `boolean` or `datetime`. A boolean is a toggle
-in the form and a `[x]` in the list; a datetime is stored as ISO 8601 in UTC —
-which sorts chronologically — and shown in a column as the local day it fell
-on, the time of day being in the record for whoever wants it.
+Fields are `string`, `integer`, `boolean`, `date` or `datetime`. A boolean is a
+toggle in the form and a `[x]` in the list. A datetime is stored as ISO 8601 in
+UTC — which sorts chronologically — and shown in a column as the local day it
+fell on, the time of day being in the record for whoever wants it. A date is a
+day in a calendar rather than a moment in time, written `2026-09-25`, which is
+what a due date wants to be: typed by hand, read by the day, and never shifted
+by a timezone.
 
 `columns` says which fields the table draws and in what order: a table reads in
 a different order from the form that fills it, and a field left out of them is
@@ -220,6 +224,21 @@ header.
 
 Ticking one off writes the moment it happened into `done_at`, and unticking it
 takes the date away again.
+
+### What colour a row is
+
+| | |
+| --- | --- |
+| green | done |
+| red | past its due date |
+| yellow | due within two days |
+| orange | due within what is left of this calendar week |
+| white | due later than that, or not due on any particular day |
+
+Done wins over everything, so a todo that was overdue turns green when it is
+ticked rather than staying red. The row the cursor is on keeps its colour and
+takes a background instead, so the one thing the colour says is not the one
+thing the cursor hides.
 
 ### Forms for a command
 

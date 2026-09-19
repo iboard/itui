@@ -17,6 +17,15 @@ defmodule ITui.Views.Todo do
   Records go through `ITui.Repo`, which keeps them in the JSON file the schema
   names as its source.
 
+  ## What colour a row is
+
+  A todo that is done is green, and the rest are coloured by how near their
+  `due` date is: red once it has gone by, yellow within two days, orange
+  within what is left of this calendar week, and white when it is further off
+  than that or not due on any particular day. The row the cursor is on keeps
+  its colour and takes a background instead, so the one thing the colour says
+  is not the one thing the cursor hides.
+
   ## Keys
 
     * `↑`/`↓` or `k`/`j` — move
@@ -44,6 +53,10 @@ defmodule ITui.Views.Todo do
   @min_flexible 6
   # However many the schema names, a list is a list and not a report.
   @max_detail 3
+  # Near enough to be worth a warning of its own.
+  @soon_days 2
+  # The 256-colour palette's orange, between the yellow and the red.
+  @orange 208
 
   @impl Atui.View
   def mount(opts) do
@@ -55,6 +68,8 @@ defmodule ITui.Views.Todo do
        notify: Keyword.get(opts, :notify),
        todos: [],
        cursor: 0,
+       # Only a test pins the day; everything else asks what it is now.
+       today: Keyword.get(opts, :today),
        sort: first_sort(schema),
        editing: nil,
        confirming: nil,
@@ -221,7 +236,11 @@ defmodule ITui.Views.Todo do
   # A date column keeps its width whether or not there is a date in it yet, so
   # the table does not jump about when one is ticked off.
   defp natural_width(%Field{type: Timestamp} = field, _todos) do
-    max(String.length(field.label) + 2, Timestamp.width())
+    max(String.length(Field.short(field)) + 2, Timestamp.width())
+  end
+
+  defp natural_width(%Field{type: ITui.Schema.Date} = field, _todos) do
+    max(String.length(Field.short(field)) + 2, ITui.Schema.Date.width())
   end
 
   defp natural_width(field, todos) do
@@ -307,17 +326,24 @@ defmodule ITui.Views.Todo do
     |> Enum.with_index()
     |> Enum.take(max(rect.height, 0))
     |> Enum.reduce(screen, fn {todo, index}, acc ->
-      row(acc, columns, todo, %{rect | y: rect.y + index, height: 1}, index == state.cursor)
+      row(
+        acc,
+        state,
+        columns,
+        todo,
+        %{rect | y: rect.y + index, height: 1},
+        index == state.cursor
+      )
     end)
   end
 
-  defp row(screen, columns, todo, rect, selected?) do
-    style = if selected?, do: Style.new(fg: :black, bg: :bright_cyan)
+  defp row(screen, state, columns, todo, rect, selected?) do
+    style = row_style(state, todo, selected?)
 
     screen
     |> Screen.fill(rect, " ", style)
     |> Screen.put_text(rect.x + 1, rect.y, if(selected?, do: "▸", else: " "), style)
-    |> dividers(columns, rect, "│", style || dim())
+    |> dividers(columns, rect, "│", %{Style.new(fg: :bright_black) | bg: style.bg})
     |> cells(columns, todo, rect, style)
   end
 
@@ -326,7 +352,7 @@ defmodule ITui.Views.Todo do
       text = Screen.truncate(cell(field, todo), width)
       x = rect.x + @indent + x + offset(field, text, width)
 
-      Screen.put_text(acc, x, rect.y, text, style || value_style(field, todo))
+      Screen.put_text(acc, x, rect.y, text, style)
     end)
   end
 
@@ -334,9 +360,50 @@ defmodule ITui.Views.Todo do
   defp offset(%Field{type: :integer}, text, width), do: max(width - String.length(text), 0)
   defp offset(_field, _text, _width), do: 0
 
-  # A todo that is done is not gone, but it should stop shouting.
-  defp value_style(%Field{type: :string}, todo), do: if(done?(todo), do: dim())
-  defp value_style(_field, _todo), do: nil
+  ## What colour a todo is
+
+  # The row the cursor is on keeps its colour and takes a background, so the
+  # one thing the colour says is not the one thing the cursor hides.
+  defp row_style(state, todo, selected?) do
+    style = tone_style(tone(state, todo))
+
+    if selected?, do: %{style | bg: :bright_black, bold: true}, else: style
+  end
+
+  @doc false
+  # Green once it is done; otherwise the colour of how near the due date is,
+  # and nothing at all for a todo that is not due on any particular day.
+  def tone(state, todo) do
+    if done?(todo), do: :done, else: due_tone(due(state, todo), today(state))
+  end
+
+  defp today(state), do: state.today || ITui.Schema.Date.local_today()
+
+  defp due(%{schema: nil}, _todo), do: nil
+
+  defp due(state, todo) do
+    case Schema.field(state.schema, :due) do
+      nil -> nil
+      field -> ITui.Schema.Date.parse(todo[field.key])
+    end
+  end
+
+  defp due_tone(nil, _today), do: :plain
+
+  defp due_tone(date, today) do
+    cond do
+      Date.before?(date, today) -> :overdue
+      Date.diff(date, today) <= @soon_days -> :soon
+      not Date.after?(date, Date.end_of_week(today)) -> :week
+      true -> :plain
+    end
+  end
+
+  defp tone_style(:done), do: Style.new(fg: :green)
+  defp tone_style(:overdue), do: Style.new(fg: :bright_red)
+  defp tone_style(:soon), do: Style.new(fg: :bright_yellow)
+  defp tone_style(:week), do: Style.new(fg: @orange)
+  defp tone_style(:plain), do: Style.new(fg: :white)
 
   defp cell(%Field{type: Boolean} = field, todo) do
     if todo[field.key] == true, do: "[x]", else: "[ ]"

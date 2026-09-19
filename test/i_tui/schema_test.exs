@@ -59,10 +59,10 @@ defmodule ITui.SchemaTest do
     end
 
     test "rejects an unknown type" do
-      json = ~s({"name": "t", "fields": [{"name": "n", "type": "date"}]})
+      json = ~s({"name": "t", "fields": [{"name": "n", "type": "colour"}]})
       assert {:error, message} = Schema.parse(json)
-      assert message =~ ~s(unknown type "date")
-      assert message =~ "known types: boolean, datetime, integer, string"
+      assert message =~ ~s(unknown type "colour")
+      assert message =~ "known types: boolean, date, datetime, integer, string"
     end
 
     test "rejects a default the field could not hold" do
@@ -172,6 +172,7 @@ defmodule ITui.SchemaTest do
                description: :string,
                url: :string,
                priority: :integer,
+               due: ITui.Schema.Date,
                done: Boolean,
                id: :integer,
                inserted_at: Timestamp,
@@ -183,6 +184,7 @@ defmodule ITui.SchemaTest do
                description: nil,
                url: nil,
                priority: 2,
+               due: nil,
                done: false,
                id: nil,
                inserted_at: nil,
@@ -307,6 +309,41 @@ defmodule ITui.SchemaTest do
     end
   end
 
+  describe "the date type" do
+    test "takes a day, and a timestamp as the day it fell on" do
+      assert ITui.Schema.Date.cast("2026-09-25") == {:ok, "2026-09-25"}
+      assert ITui.Schema.Date.cast("  2026-09-25 ") == {:ok, "2026-09-25"}
+      assert ITui.Schema.Date.cast(~D[2026-09-25]) == {:ok, "2026-09-25"}
+      assert ITui.Schema.Date.cast("2026-09-25T19:26:18Z") == {:ok, "2026-09-25"}
+      assert ITui.Schema.Date.cast(nil) == {:ok, nil}
+      assert ITui.Schema.Date.cast("") == {:ok, nil}
+    end
+
+    test "refuses what is not one, and says how one is written" do
+      assert ITui.Schema.Date.cast("25.09.2026") == :error
+      assert ITui.Schema.Date.cast("2026-13-01") == :error
+      assert ITui.Schema.Date.cast("tomorrow") == :error
+
+      json = ~s({"name": "t", "fields": [{"name": "due", "type": "date"}]})
+      {:ok, schema} = Schema.parse(json)
+
+      assert messages(Schema.cast(schema, %{"due" => "tomorrow"}), schema) ==
+               [{"Due", "must be a date, as 2026-09-25"}]
+    end
+
+    test "is the same thing on the way in and on the way out" do
+      json = ~s({"name": "t", "fields": [{"name": "due", "type": "date"}]})
+      {:ok, schema} = Schema.parse(json)
+      field = Schema.field(schema, :due)
+
+      assert {:ok, %{due: "2026-09-25"}} = Schema.cast(schema, %{"due" => "2026-09-25"})
+      assert Field.format(field, "2026-09-25") == "2026-09-25"
+      assert Field.format(field, nil) == ""
+      assert ITui.Schema.Date.parse("2026-09-25") == ~D[2026-09-25]
+      assert ITui.Schema.Date.parse("whenever") == nil
+    end
+  end
+
   describe "the yes/no type" do
     test "takes the words a person types" do
       for yes <- ~w(true yes Y 1 on), do: assert(Boolean.cast(yes) == {:ok, true})
@@ -330,13 +367,13 @@ defmodule ITui.SchemaTest do
       assert schema.source == "data/records/todos.json"
 
       assert Enum.map(schema.fields, & &1.name) ==
-               ["title", "description", "url", "priority", "done", "id", "inserted_at", "done_at"]
+               ~w(title description url priority due done id inserted_at done_at)
 
       assert schema.sort == :id
 
       # The table reads in a different order from the form that fills it.
       assert Enum.map(Schema.list_fields(schema), & &1.name) ==
-               ["id", "done", "priority", "inserted_at", "done_at", "title", "description"]
+               ~w(id done priority inserted_at due done_at title description)
 
       assert schema.stretch == :description
 
@@ -350,8 +387,11 @@ defmodule ITui.SchemaTest do
       # Description is a column and is repeated in full beside the list.
       assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
 
+      # The due date is asked for; the ones the application writes are not.
       assert Enum.map(Schema.form_fields(schema), & &1.name) ==
-               ["title", "description", "url", "priority", "done"]
+               ~w(title description url priority due done)
+
+      refute Schema.field(schema, :due).required
     end
 
     test "reads a schema from a path" do

@@ -3,7 +3,16 @@
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
+  "columns": [
+    "id",
+    "done",
+    "priority",
+    "inserted_at",
+    "due",
+    "done_at",
+    "title",
+    "description"
+  ],
   "sort": "id",
   "stretch": "description",
   "detail": ["description", "url"],
@@ -35,6 +44,12 @@
       "type": "integer",
       "default": 2,
       "placeholder": "1 is highest"
+    },
+    {
+      "name": "due",
+      "label": "Due",
+      "type": "date",
+      "placeholder": "2026-12-24, or nothing at all"
     },
     {
       "name": "done",
