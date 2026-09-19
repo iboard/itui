@@ -21,10 +21,10 @@ the parameters those commands need.
 
 ## Status
 
-Early development. The current milestones are:
+Early development.
 
-- **Menu MVP** — run `df`, `uptime` and `free` from the menu.
-- **Forms & data MVP** — a small todo application driven by JSON schemas.
+- **Menu MVP** — done: `df`, `uptime` and `free` run from the menu.
+- **Forms & data MVP** — next: a small todo application driven by JSON schemas.
 
 ## Installation
 
@@ -36,10 +36,74 @@ cd itui
 mix deps.get
 ```
 
-## Usage
+## Running it
 
 ```console
-mix run --no-halt
+bin/itui
+```
+
+That is `elixir --erl "+Bc" -S mix run --no-halt`: the `+Bc` flag is what makes
+Ctrl-C reach the application instead of opening the BEAM's BREAK menu. Plain
+`mix run --no-halt` works too, but the VM keeps Ctrl-C for itself.
+
+### Keys
+
+| | |
+| --- | --- |
+| `↑` `↓`, `k` `j` | move through the entries |
+| `enter`, `→` | open a submenu, or run the command |
+| an entry's own key | the same, without moving first |
+| `esc`, `←`, `backspace` | back out of a submenu |
+| `q` | quit |
+
+While a command's output is open, the arrows and `page up`/`page down` scroll
+it and `esc` closes it.
+
+## The menu file
+
+The menu is data, not code: `data/menus/main.json` describes it, and iTUI reads
+it at startup. An entry carries exactly one of `items` (a submenu), `command`
+(a program and its `args`) or `action` (`"quit"` is the only one so far).
+
+```json
+{
+  "title": "iTUI",
+  "items": [
+    {
+      "key": "s",
+      "label": "System",
+      "items": [
+        {
+          "key": "d",
+          "label": "Disk free",
+          "description": "Free space per mounted filesystem",
+          "command": "df",
+          "args": ["-h"]
+        }
+      ]
+    },
+    { "key": "q", "label": "Quit", "action": "quit" }
+  ]
+}
+```
+
+A command is never handed to a shell: the program is resolved with
+`System.find_executable/1` and its arguments are passed straight to it, so
+nothing in a menu file is expanded, globbed or chained. It runs off the UI's
+process, so the interface keeps drawing — and stays quittable — while it works.
+
+A menu file that does not parse is reported on screen rather than stopping the
+application: a terminal that says what is wrong with the file is more use than
+one that refuses to open.
+
+## Layout
+
+```
+data/menus/main.json     the menu, as data
+data/schemas/            form and data-structure schemas (next milestone)
+lib/i_tui/menu.ex        the menu file, parsed
+lib/i_tui/command.ex     a system command, and the running of it
+lib/i_tui/views/         the ATUI views: the menu, and the output popup
 ```
 
 ## Documentation

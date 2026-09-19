@@ -1,0 +1,38 @@
+{
+  "title": "iTUI",
+  "items": [
+    {
+      "key": "s",
+      "label": "System",
+      "description": "What this machine is doing right now",
+      "items": [
+        {
+          "key": "d",
+          "label": "Disk free",
+          "description": "Free space per mounted filesystem",
+          "command": "df",
+          "args": ["-h"]
+        },
+        {
+          "key": "u",
+          "label": "Uptime",
+          "description": "How long the machine has been up, and its load",
+          "command": "uptime"
+        },
+        {
+          "key": "m",
+          "label": "Memory",
+          "description": "Memory and swap in use",
+          "command": "free",
+          "args": ["-h"]
+        }
+      ]
+    },
+    {
+      "key": "q",
+      "label": "Quit",
+      "description": "Leave iTUI",
+      "action": "quit"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs iTUI from source with the VM flags a TUI needs.
+#
+#   +Bc  — Ctrl-C reaches the application instead of opening the BREAK menu.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+exec elixir --erl "+Bc" -S mix run --no-halt "$@"

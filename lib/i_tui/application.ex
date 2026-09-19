@@ -1,20 +1,26 @@
 defmodule ITui.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
-  @moduledoc false
+  @moduledoc """
+  The OTP application: it starts the terminal UI under its own supervisor.
+
+  The UI is a child spec like any other, so quitting it stops that child and,
+  with `Atui`'s default `halt: :system`, the VM with it. Set
+  `config :i_tui, start_ui: false` to load the application without taking the
+  terminal — which is what the test suite does, driving views headlessly
+  instead.
+  """
 
   use Application
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: ITui.Worker.start_link(arg)
-      # {ITui.Worker, arg}
-    ]
+    Supervisor.start_link(children(), strategy: :one_for_one, name: ITui.Supervisor)
+  end
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: ITui.Supervisor]
-    Supervisor.start_link(children, opts)
+  defp children do
+    if Application.get_env(:i_tui, :start_ui, true) do
+      [{Atui, view: ITui.Views.MainMenu}]
+    else
+      []
+    end
   end
 end
