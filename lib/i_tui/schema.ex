@@ -22,7 +22,8 @@ defmodule ITui.Schema do
   collection and heads the list of them, defaulting to `label`. `columns` says
   which fields the list gives a column to and in what order — a table reads in
   a different order from the form that fills it, and a field left out is shown
-  beside the list instead. `sort` names the column the list starts sorted by.
+  beside the list instead. `sort` names the column the list starts sorted by,
+  and `stretch` the one that takes whatever width the other columns leave over.
   `source` is
   where `ITui.Repo` keeps the records, and only matters for a schema that is
   stored; a form collecting the arguments of a command has no source at all.
@@ -52,7 +53,7 @@ defmodule ITui.Schema do
   alias Ecto.Changeset
   alias ITui.Schema.Field
 
-  defstruct [:name, :label, :title, :source, :sort, :columns, fields: []]
+  defstruct [:name, :label, :title, :source, :sort, :columns, :stretch, fields: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -61,6 +62,7 @@ defmodule ITui.Schema do
           source: Path.t() | nil,
           sort: atom() | nil,
           columns: [atom()] | nil,
+          stretch: atom() | nil,
           fields: [Field.t()]
         }
 
@@ -111,7 +113,8 @@ defmodule ITui.Schema do
     with {:ok, name} <- name(map),
          {:ok, fields} <- parse_fields(fields, name),
          {:ok, columns} <- columns(map, fields, name),
-         {:ok, sort} <- sort(map, fields, name) do
+         {:ok, stretch} <- named(map, "stretch", fields, name),
+         {:ok, sort} <- named(map, "sort", fields, name) do
       label = label(map, name)
 
       {:ok,
@@ -122,6 +125,7 @@ defmodule ITui.Schema do
          source: source(map, name),
          sort: sort,
          columns: columns,
+         stretch: stretch,
          fields: fields
        }}
     end
@@ -369,19 +373,23 @@ defmodule ITui.Schema do
 
   defp columns(_map, _fields, _name), do: {:ok, nil}
 
-  # The column a list starts sorted by, named rather than guessed.
-  defp sort(%{"sort" => sort}, fields, name) when is_binary(sort) do
-    case Enum.find(fields, &(&1.name == sort)) do
-      nil -> {:error, ~s(the sort of "#{name}" is not one of its fields: #{inspect(sort)})}
-      field -> {:ok, field.key}
+  # `sort` and `stretch` each name one field: the column a list starts sorted
+  # by, and the one that takes whatever width the others leave over.
+  defp named(map, key, fields, name) do
+    case Map.get(map, key) do
+      nil ->
+        {:ok, nil}
+
+      value when is_binary(value) ->
+        case Enum.find(fields, &(&1.name == value)) do
+          nil -> {:error, ~s(the #{key} of "#{name}" is not one of its fields: #{inspect(value)})}
+          field -> {:ok, field.key}
+        end
+
+      value ->
+        {:error, ~s(the #{key} of "#{name}" must be a field name, got: #{inspect(value)})}
     end
   end
-
-  defp sort(%{"sort" => sort}, _fields, name) when not is_nil(sort) do
-    {:error, ~s(the sort of "#{name}" must be a field name, got: #{inspect(sort)})}
-  end
-
-  defp sort(_map, _fields, _name), do: {:ok, nil}
 
   defp data_dir, do: Application.get_env(:i_tui, :data_dir, "data")
 end

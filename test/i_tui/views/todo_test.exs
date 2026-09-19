@@ -91,7 +91,7 @@ defmodule ITui.Views.TodoTest do
       assert line =~ "1"
       assert line =~ "2"
       assert line =~ "[ ]"
-      assert line =~ ~r/\d{4}-\d\d-\d\d \d\d:\d\d/
+      assert line =~ ~r/\d{4}-\d\d-\d\d/
     end
 
     test "the serial number is the one the repository gave it", %{ui: ui, schema: schema} do
@@ -154,7 +154,8 @@ defmodule ITui.Views.TodoTest do
       press(ui, {:char, " "})
       assert %{done: true, done_at: at} = one(schema)
       assert {:ok, _at, 0} = DateTime.from_iso8601(at)
-      assert text(ui) |> row("Write the docs") =~ ~r/\d\d:\d\d.*\d\d:\d\d/
+      # Both dates are in the row now: the one it was made on, and this one.
+      assert text(ui) |> row("Write the docs") =~ ~r/\d{4}-\d\d-\d\d.*\d{4}-\d\d-\d\d/
 
       press(ui, {:char, " "})
       assert %{done: false, done_at: nil} = one(schema)
@@ -297,6 +298,68 @@ defmodule ITui.Views.TodoTest do
 
     refute text(ui) =~ "Added behind its back"
     assert press(ui, {:char, "R"}) =~ "Added behind its back"
+  end
+end
+
+defmodule ITui.Views.TodoStretchTest do
+  use ITui.UICase, async: false
+
+  alias ITui.{Repo, Schema}
+  alias ITui.Views.Todo
+
+  @schema """
+  {"name": "note", "label": "Note", "columns": ["id", "title", "body"], "stretch": "body",
+   "fields": [
+    {"name": "title", "label": "Title", "required": true},
+    {"name": "body", "label": "Body", "lines": 3},
+    {"name": "id", "label": "#", "type": "integer", "form": false}
+  ]}
+  """
+
+  setup do
+    source = Path.join(System.tmp_dir!(), "i_tui_#{System.unique_integer([:positive])}.json")
+    on_exit(fn -> File.rm(source) end)
+
+    {:ok, schema} = Schema.parse(@schema)
+    schema = %{schema | source: source}
+
+    {:ok, _record} =
+      Repo.insert(schema, %{
+        "title" => "Short",
+        "body" => "a body long enough to be cut down to whatever room is left over"
+      })
+
+    %{schema: schema}
+  end
+
+  defp body_column(ui) do
+    ui
+    |> text()
+    |> String.split("\r\n")
+    |> Enum.find("", &(&1 =~ "a body"))
+    |> String.split("│")
+    # The last piece is what follows the box's own right border.
+    |> Enum.drop(-1)
+    |> List.last()
+    |> String.trim()
+  end
+
+  test "the column the schema names takes the room the others leave", %{schema: schema} do
+    ui = start_ui(Todo, schema: schema, size: {80, 10})
+
+    assert String.length(body_column(ui)) > 40
+    assert body_column(ui) =~ "a body long enough"
+  end
+
+  test "and gives it back when there is less of it", %{schema: schema} do
+    ui = start_ui(Todo, schema: schema, size: {46, 10})
+    shown = body_column(ui)
+
+    assert String.length(shown) < 30
+    assert String.starts_with?("a body long enough to be cut down", shown)
+
+    # The other columns are untouched: the stretching one took the squeeze.
+    assert text(ui) =~ "Short"
   end
 end
 

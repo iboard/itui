@@ -3,8 +3,9 @@
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title"],
+  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
   "sort": "id",
+  "stretch": "description",
   "fields": [
     {
       "name": "title",

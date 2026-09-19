@@ -114,8 +114,9 @@ stores the record, so a field added to the file shows up in both:
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title"],
+  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title", "description"],
   "sort": "id",
+  "stretch": "description",
   "fields": [
     { "name": "title", "label": "Title", "type": "string", "required": true },
     { "name": "description", "label": "Description", "lines": 4 },
@@ -131,12 +132,14 @@ stores the record, so a field added to the file shows up in both:
 
 Fields are `string`, `integer`, `boolean` or `datetime`. A boolean is a toggle
 in the form and a `[x]` in the list; a datetime is stored as ISO 8601 in UTC —
-which sorts chronologically — and shown in local time.
+which sorts chronologically — and shown in a column as the local day it fell
+on, the time of day being in the record for whoever wants it.
 
 `columns` says which fields the table draws and in what order: a table reads in
 a different order from the form that fills it, and a field left out of them is
-shown beside the list instead, which is where a description and a link belong.
-Leave `columns` out and every field gets one, in the order they are declared.
+shown beside the list instead, which is where a link belongs. Leave `columns`
+out and every field gets one, in the order they are declared. `stretch` names
+the column that takes whatever width the others leave over, and is cut to fit.
 `"form": false` on a field means it is never asked for, which is what a serial
 number and a timestamp the application writes itself need. `sort` names the
 column the list starts sorted by.
@@ -200,11 +203,11 @@ header.
 
 ```
  4 todos, 1 done                                              sorted by # ▲
-   # ▲ │ Done   │ P   │ Created          │ Checked          │ Title
- ──────┼────────┼─────┼──────────────────┼──────────────────┼─────────────────────
- ▸   2 │ [x]    │   1 │ 2026-09-19 21:26 │ 2026-09-19 22:16 │ scheissn geh
-     3 │ [ ]    │   5 │ 2026-09-19 21:28 │                  │ publish iTUI to HEX
- Description: the last one before the release
+   # ▲ │ Done   │ P   │ Created    │ Checked    │ Title               │ Description
+ ──────┼────────┼─────┼────────────┼────────────┼─────────────────────┼─────────────
+ ▸   2 │ [x]    │   1 │ 2026-09-19 │ 2026-09-19 │ scheissn geh        │ how can I wr
+     3 │ [ ]    │   5 │ 2026-09-19 │            │ publish iTUI to HEX │
+ URL: https://hex.pm/packages/i_tui
 ```
 
 Ticking one off writes the moment it happened into `done_at`, and unticking it

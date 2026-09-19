@@ -235,13 +235,23 @@ defmodule ITui.SchemaTest do
       assert message =~ "must be a list of field names"
     end
 
-    test "a schema names the column its list starts sorted by" do
-      json = ~s({"name": "t", "sort": "b", "fields": [{"name": "a"}, {"name": "b"}]})
-      assert {:ok, %Schema{sort: :b}} = Schema.parse(json)
+    test "a schema names the column its list starts sorted by, and the one that stretches" do
+      json =
+        ~s({"name": "t", "sort": "b", "stretch": "a", "fields": [{"name": "a"}, {"name": "b"}]})
+
+      assert {:ok, %Schema{sort: :b, stretch: :a}} = Schema.parse(json)
 
       json = ~s({"name": "t", "sort": "z", "fields": [{"name": "a"}]})
       assert {:error, message} = Schema.parse(json)
       assert message =~ ~s(the sort of "t" is not one of its fields: "z")
+
+      json = ~s({"name": "t", "stretch": "z", "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the stretch of "t" is not one of its fields: "z")
+
+      json = ~s({"name": "t", "stretch": 1, "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ "must be a field name"
     end
   end
 
@@ -254,8 +264,9 @@ defmodule ITui.SchemaTest do
       assert Timestamp.cast("last tuesday") == :error
     end
 
-    test "is shown as a date and a time, and sorts as it is stored" do
-      assert Timestamp.format("2026-09-19T19:26:18Z") =~ ~r/^2026-09-19 \d\d:\d\d$/
+    test "is shown as the day it fell on, and sorts as it is stored" do
+      assert Timestamp.format("2026-09-19T19:26:18Z") =~ ~r/^2026-09-\d\d$/
+      assert Timestamp.width() == 10
       assert Timestamp.format(nil) == ""
       assert Timestamp.format("not a date") == "not a date"
 
@@ -302,7 +313,9 @@ defmodule ITui.SchemaTest do
 
       # The table reads in a different order from the form that fills it.
       assert Enum.map(Schema.list_fields(schema), & &1.name) ==
-               ["id", "done", "priority", "inserted_at", "done_at", "title"]
+               ["id", "done", "priority", "inserted_at", "done_at", "title", "description"]
+
+      assert schema.stretch == :description
 
       # A label too wide for a column has a short one; a long field has lines.
       assert Schema.field(schema, :priority) |> Field.short() == "P"
@@ -311,7 +324,7 @@ defmodule ITui.SchemaTest do
       assert Field.multiline?(Schema.field(schema, :description))
       refute Field.multiline?(Schema.field(schema, :title))
 
-      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
+      assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["url"]
 
       assert Enum.map(Schema.form_fields(schema), & &1.name) ==
                ["title", "description", "url", "priority", "done"]

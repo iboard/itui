@@ -13,8 +13,8 @@ defmodule ITui.Schema.Timestamp do
       iex> ITui.Schema.Timestamp.cast("last tuesday")
       :error
 
-  It is shown in the local timezone, because that is the one the person
-  reading the screen is in.
+  It is shown as the local day it fell on, because that is the timezone the
+  person reading the screen is in, and the day is what a list is read by.
   """
 
   use Ecto.Type
@@ -49,7 +49,10 @@ defmodule ITui.Schema.Timestamp do
   def now, do: encode(DateTime.utc_now())
 
   @doc """
-  A timestamp as a column shows it: `2026-09-19 21:26`, in local time.
+  A timestamp as a column shows it: `2026-09-19`, the local day it fell on.
+
+  The time of day is in the record, and in the file; a list of what happened
+  and when is read by the day, and the hours cost it four columns of width.
 
       iex> ITui.Schema.Timestamp.format(nil)
       ""
@@ -70,7 +73,7 @@ defmodule ITui.Schema.Timestamp do
 
   @doc "The width `format/1` needs, for laying out a column."
   @spec width() :: pos_integer()
-  def width, do: 16
+  def width, do: 10
 
   defp encode(%DateTime{} = at) do
     at |> DateTime.truncate(:second) |> DateTime.shift_zone!("Etc/UTC") |> DateTime.to_iso8601()
@@ -84,8 +87,8 @@ defmodule ITui.Schema.Timestamp do
     )
   end
 
-  defp render({{year, month, day}, {hour, minute, _second}}) do
-    "#{year}-#{pad(month)}-#{pad(day)} #{pad(hour)}:#{pad(minute)}"
+  defp render({{year, month, day}, {_hour, _minute, _second}}) do
+    "#{year}-#{pad(month)}-#{pad(day)}"
   end
 
   defp pad(number), do: number |> Integer.to_string() |> String.pad_leading(2, "0")

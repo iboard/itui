@@ -41,7 +41,7 @@ defmodule ITui.Views.Todo do
   # A space, a rule, a space.
   @gap 3
   @max_column 24
-  @min_flexible 16
+  @min_flexible 6
 
   @impl Atui.View
   def mount(opts) do
@@ -183,33 +183,23 @@ defmodule ITui.Views.Todo do
   defp columns(%{schema: nil}, _width), do: []
 
   defp columns(state, width) do
-    state.schema |> Schema.list_fields() |> fit(state.todos, width)
+    state.schema |> Schema.list_fields() |> fit(state, width)
   end
 
-  # A column that will not fit is not shown at all: half a column of dates is
-  # worse than none, and the sort is named in the summary either way.
-  defp fit([], _todos, _width), do: []
+  # A column that will not fit is not shown at all — half a column of dates is
+  # worse than none, and the sort is named in the summary either way. They go
+  # from the right, which is where a schema puts what it can spare.
+  defp fit([], _state, _width), do: []
 
-  defp fit(fields, todos, width) do
-    widths = Enum.map(fields, &natural_width(&1, todos))
+  defp fit(fields, state, width) do
+    widths = Enum.map(fields, &natural_width(&1, state.todos))
     room = width - @gap * (length(fields) - 1)
-    widths = stretch(widths, flexible(fields), room - Enum.sum(widths))
+    widths = stretch(widths, flexible(fields, state.schema), room - Enum.sum(widths))
 
     if Enum.sum(widths) > room and length(fields) > 1 do
-      fit(drop_one(fields, flexible(fields)), todos, width)
+      fit(Enum.drop(fields, -1), state, width)
     else
       place(fields, widths, width)
-    end
-  end
-
-  # The column that stretches is the one with something to say, so it is the
-  # last to go: what gets dropped is the rightmost of the others.
-  defp drop_one(fields, nil), do: Enum.drop(fields, -1)
-
-  defp drop_one(fields, flexible) do
-    case fields |> Enum.with_index() |> Enum.reverse() |> Enum.find(&(elem(&1, 1) != flexible)) do
-      nil -> Enum.drop(fields, -1)
-      {_field, index} -> List.delete_at(fields, index)
     end
   end
 
@@ -239,7 +229,15 @@ defmodule ITui.Views.Todo do
     |> min(@max_column)
   end
 
-  defp flexible(fields), do: Enum.find_index(fields, &(&1.type == :string))
+  # The column the schema says takes the slack — or, failing that, the first
+  # one with text in it, text being the thing that can live with less room.
+  defp flexible(fields, %Schema{stretch: stretch}) when not is_nil(stretch) do
+    Enum.find_index(fields, &(&1.key == stretch)) || first_text(fields)
+  end
+
+  defp flexible(fields, _schema), do: first_text(fields)
+
+  defp first_text(fields), do: Enum.find_index(fields, &(&1.type == :string))
 
   defp stretch(widths, nil, _slack), do: widths
 

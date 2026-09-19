@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `ctrl-d` saves the form; what it holds is shown in one line wherever
   there is only one.
 - A field can carry a `"short"` label for a column too narrow for its own.
+- A schema names the column that takes the width the others leave over
+  (`"stretch"`), and the todo list gives it to `description`.
+- A date in a column is the day it fell on, without the time.
 - The todo list is a sortable, ruled table — `←`/`→` move the sort from column
   to column, `r` turns it the other way up, `R` re-reads the file — with a
   serial number, `description` and `url` fields, a `Created` column and a
