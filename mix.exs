@@ -17,6 +17,7 @@ defmodule ITui.MixProject do
       package: package(),
       # Docs
       name: "iTUI",
+      escript: escript(),
       source_url: @source_url,
       homepage_url: @source_url,
       docs: docs()
@@ -37,11 +38,18 @@ defmodule ITui.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:atui, "~> 0.3.0"},
+      {:atui, "~> 0.4"},
       {:ecto, "~> 3.13"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
+  end
+
+  # `app: nil` so that the application is not started before main/1 — asking
+  # for the version should not open a terminal UI — and `+Bc` so that Ctrl-C
+  # reaches the application rather than the BEAM's BREAK menu.
+  defp escript do
+    [main_module: ITui.CLI, name: "itui", app: nil, emu_args: "+Bc"]
   end
 
   defp description do
@@ -54,7 +62,8 @@ defmodule ITui.MixProject do
       name: "i_tui",
       licenses: ["GPL-3.0-or-later"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib data mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
+      # data/records is whoever is running iTUI, not the package.
+      files: ~w(lib data/menus data/schemas mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
     ]
   end
 

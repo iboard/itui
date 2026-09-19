@@ -53,7 +53,7 @@ defmodule ITui.Views.MainMenu do
   def handle_key(:ctrl_c, state), do: {:halt, state}
 
   # The popup owns the keyboard while it is open. The flag is set when the
-  # popup is pushed and cleared when it says it has closed (`ITui.Views.Popup`),
+  # popup is pushed and cleared when it says it has closed (`Atui.Popup`),
   # so a key that
   # arrives in the same read as the one that closed it is dropped rather than
   # moving a cursor nobody can see — the safer of the two mistakes.

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `itui` as an escript: `mix escript.install hex i_tui`, with `--where`,
+  `--version` and `--help`, and the `+Bc` flag a TUI needs baked in.
+- `ITui.Data` — the menus and schemas iTUI ships with are read into the code at
+  compile time and written into `$ITUI_DATA`, `~/.itui` or `~/.config/itui` on
+  first run, and never over a file that is already there. A schema's `source`
+  is a path inside that directory.
+
 - Initial project scaffolding: mix project, ATUI dependency, ExDoc setup and
   GPL-3.0 licensing.
 - The menu MVP: a structured menu read from `data/menus/main.json`, with

@@ -46,10 +46,10 @@ defmodule ITui.Views.Todo do
 
   use Atui.View
 
-  alias Atui.{Layout, Style, Text}
+  alias Atui.{Layout, Popup, Style, Text}
   alias ITui.{Repo, Schema}
   alias ITui.Schema.{Boolean, Field, Timestamp}
-  alias ITui.Views.{Filter, Form, Popup}
+  alias ITui.Views.{Filter, Form}
 
   # Two columns of room for the cursor, and one of air after it.
   @indent 3

@@ -37,20 +37,53 @@ Early development.
 Requires Elixir ~> 1.19 and OTP 28.
 
 ```console
+mix escript.install hex i_tui
+```
+
+That puts `itui` in `~/.mix/escripts`; add it to your `PATH` if it is not
+there already. From a clone instead:
+
+```console
 git clone https://github.com/iboard/itui.git
 cd itui
 mix deps.get
+mix escript.build && ./itui
 ```
 
 ## Running it
 
 ```console
-bin/itui
+itui              # open the menu
+itui --where      # say which data directory it is using
+itui --version
+itui --help
 ```
 
-That is `elixir --erl "+Bc" -S mix run --no-halt`: the `+Bc` flag is what makes
-Ctrl-C reach the application instead of opening the BEAM's BREAK menu. Plain
-`mix run --no-halt` works too, but the VM keeps Ctrl-C for itself.
+The escript carries `+Bc`, which is what makes Ctrl-C reach the application
+instead of opening the BEAM's BREAK menu. From a clone, `bin/itui` does the
+same for `mix run`.
+
+## Where your files live
+
+The menus and schemas are yours to edit, so they live in your home rather than
+next to the code. iTUI carries the ones it ships with and writes them out the
+first time it runs, into the first of:
+
+| | |
+| --- | --- |
+| `$ITUI_DATA` | a directory said outright |
+| `~/.itui` | if that is where you keep it |
+| `~/.config/itui` | the default (or `$XDG_CONFIG_HOME/itui`) |
+
+```
+~/.config/itui/menus/main.json       the menu
+~/.config/itui/schemas/*.json        forms and data structures
+~/.config/itui/records/*.json        the records themselves
+```
+
+A file that is already there is never written over, so an upgrade that adds a
+schema adds it and your edited menu stays edited. `itui --where` says which
+directory is in use.
 
 ### Keys
 
@@ -113,7 +146,7 @@ stores the record, so a field added to the file shows up in both:
   "name": "todo",
   "label": "Todo",
   "title": "Todos",
-  "source": "data/records/todos.json",
+  "source": "records/todos.json",
   "columns": ["id", "done", "priority", "inserted_at", "due", "done_at", "title", "description"],
   "sort": "id",
   "stretch": "description",
@@ -285,9 +318,10 @@ the `{{placeholders}}` with what the form collected:
 ## Layout
 
 ```
-data/menus/main.json     the menu, as data
-data/schemas/*.json      forms and data structures, as data
-data/records/*.json      the records themselves
+data/menus/main.json     the menu iTUI ships with
+data/schemas/*.json      the schemas it ships with
+lib/i_tui/data.ex        where those files live once it is installed
+lib/i_tui/cli.ex         the escript
 lib/i_tui/menu.ex        the menu file, parsed
 lib/i_tui/command.ex     a system command, and the running of it
 lib/i_tui/schema.ex      a schema file, parsed, and its Ecto changesets

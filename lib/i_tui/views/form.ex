@@ -5,12 +5,12 @@ defmodule ITui.Views.Form do
   Pushed by whatever needs values — the menu, to collect the arguments of a
   command; the todo list, to add or edit an entry — and popped with the answer.
   The view that pushed it gets one message on the way out
-  (`ITui.Views.Popup`), carrying `{:submitted, attrs}` or `:cancelled`.
+  (`Atui.Popup`), carrying `{:submitted, attrs}` or `:cancelled`.
 
   Text fields are `Atui.TextInput`s and take the editing keys a readline user
   expects. A boolean field is a toggle instead, flipped with space, because a
   yes/no question deserves less than a text field. A field the schema gives
-  more than one line to is an `ITui.TextArea`, where `enter` starts a new line
+  more than one line to is an `Atui.TextArea`, where `enter` starts a new line
   rather than saving — `tab` moves on, and `ctrl-d` saves from anywhere.
 
   Nothing is submitted until every field casts: `enter` shows all of the
@@ -29,11 +29,9 @@ defmodule ITui.Views.Form do
 
   use Atui.View
 
-  alias Atui.{Layout, Style, Text, TextInput}
-  alias ITui.TextArea
+  alias Atui.{Layout, Popup, Style, Text, TextArea, TextInput}
   alias ITui.Schema
   alias ITui.Schema.{Boolean, Field}
-  alias ITui.Views.Popup
 
   @label_width 20
 

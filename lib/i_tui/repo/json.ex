@@ -1,6 +1,7 @@
 defmodule ITui.Repo.Json do
   @moduledoc """
-  Keeps a schema's records in the JSON file the schema names as its `source`.
+  Keeps a schema's records in the JSON file the schema names as its `source`,
+  which is a path inside the data directory — see `ITui.Data`.
 
   The whole file is read, changed and written back on every call. For a todo
   list that is the right trade: the records stay a readable array of objects
@@ -70,6 +71,8 @@ defmodule ITui.Repo.Json do
   end
 
   defp read(%Schema{source: source} = schema) do
+    source = ITui.Data.path(source)
+
     case File.read(source) do
       {:ok, contents} -> decode(contents, schema)
       {:error, :enoent} -> {:ok, []}
@@ -86,6 +89,7 @@ defmodule ITui.Repo.Json do
   end
 
   defp write(%Schema{source: source}, records) do
+    source = ITui.Data.path(source)
     contents = Jason.encode!(Enum.map(records, &dump/1), pretty: true) <> "\n"
 
     with :ok <- File.mkdir_p(Path.dirname(source)),

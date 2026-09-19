@@ -5,14 +5,13 @@ defmodule ITui.Views.Output do
   Pushed by `ITui.Views.MainMenu` once a command has finished, it owns the
   keyboard while it is open: arrows and `page up`/`page down` scroll, `esc`,
   `q` or `enter` close it. On the way out it tells whoever pushed it that it
-  has gone — see `ITui.Views.Popup` — so the menu knows the keys are its own
+  has gone — see `Atui.Popup` — so the menu knows the keys are its own
   again.
   """
 
   use Atui.View
 
-  alias Atui.{Layout, Style, Text}
-  alias ITui.Views.Popup
+  alias Atui.{Layout, Popup, Style, Text}
 
   @page 10
 

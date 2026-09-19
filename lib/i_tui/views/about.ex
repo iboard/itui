@@ -10,8 +10,7 @@ defmodule ITui.Views.About do
 
   use Atui.View
 
-  alias Atui.{Layout, Style, Text}
-  alias ITui.Views.Popup
+  alias Atui.{Layout, Popup, Style, Text}
 
   @home "github.com/iboard/itui"
   @license "GPL-3.0-or-later"

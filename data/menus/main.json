@@ -39,7 +39,7 @@
     {
       "key": "t",
       "label": "Todos",
-      "description": "A small todo list, kept in data/records/todos.json",
+      "description": "A small todo list, kept in records/todos.json",
       "view": "todo"
     },
     {

@@ -11,7 +11,7 @@ defmodule ITui.Views.Filter do
   — the list behind the popup is filtered as the boxes are ticked, not when
   the popup closes, because seeing what a filter does is most of choosing it.
   The set of kinds to hide goes back again on the way out (see
-  `ITui.Views.Popup`).
+  `Atui.Popup`).
 
   ## Keys
 
@@ -23,8 +23,7 @@ defmodule ITui.Views.Filter do
 
   use Atui.View
 
-  alias Atui.{Layout, Style, Text}
-  alias ITui.Views.Popup
+  alias Atui.{Layout, Popup, Style, Text}
 
   @impl Atui.View
   def mount(opts) do

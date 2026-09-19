@@ -11,7 +11,7 @@ defmodule ITui.Schema do
         "name": "todo",
         "label": "Todo",
         "title": "Todos",
-        "source": "data/records/todos.json",
+        "source": "records/todos.json",
         "fields": [
           {"name": "title", "label": "Title", "type": "string", "required": true},
           {"name": "done", "label": "Done", "type": "boolean", "default": false}
@@ -26,8 +26,8 @@ defmodule ITui.Schema do
   there, for a column worth repeating in full. `sort` names the column the list
   starts sorted by, and `stretch` the one that takes whatever width the other
   columns leave over. `source` is
-  where `ITui.Repo` keeps the records, and only matters for a schema that is
-  stored; a form collecting the arguments of a command has no source at all.
+  where `ITui.Repo` keeps the records — a path inside the data directory, see
+  `ITui.Data` — and only matters for a schema that is stored; a form collecting the arguments of a command has no source at all.
 
   ## Ecto without a database
 

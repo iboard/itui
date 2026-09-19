@@ -440,7 +440,7 @@ defmodule ITui.SchemaTest do
   describe "load/1" do
     test "reads a schema by name from the data directory" do
       assert {:ok, schema} = Schema.load("todo")
-      assert schema.source == "data/records/todos.json"
+      assert schema.source == "records/todos.json"
 
       assert Enum.map(schema.fields, & &1.name) ==
                ~w(title description url priority due done id inserted_at done_at)

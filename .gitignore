@@ -32,3 +32,6 @@ i_tui-*.tar
 
 # Records belong to whoever is running iTUI, not to the repository
 /data/records/*.json
+
+# The built escript
+/itui

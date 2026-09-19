@@ -2,7 +2,7 @@
   "name": "todo",
   "label": "Todo",
   "title": "Todos",
-  "source": "data/records/todos.json",
+  "source": "records/todos.json",
   "columns": [
     "id",
     "done",

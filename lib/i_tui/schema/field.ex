@@ -25,7 +25,7 @@ defmodule ITui.Schema.Field do
         "lines": 4                // optional: a field of several lines
       }
 
-  `lines` above one makes the form draw an `ITui.TextArea` instead of a
+  `lines` above one makes the form draw an `Atui.TextArea` instead of a
   single-line field, and `short` is for a label too wide to head a column.
 
   `form` is what a field says about where it belongs: a timestamp the

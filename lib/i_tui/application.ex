@@ -7,6 +7,10 @@ defmodule ITui.Application do
   `config :i_tui, start_ui: false` to load the application without taking the
   terminal — which is what the test suite does, driving views headlessly
   instead.
+
+  Before the UI starts, `ITui.Data.resolve!/0` works out where the menus and
+  schemas live and writes out the ones that are missing, so that an escript
+  with no data directory beside it has one by the time a menu is read.
   """
 
   use Application
@@ -18,6 +22,8 @@ defmodule ITui.Application do
 
   defp children do
     if Application.get_env(:i_tui, :start_ui, true) do
+      ITui.Data.resolve!()
+
       [{Atui, view: ITui.Views.MainMenu}]
     else
       []

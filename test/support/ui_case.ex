@@ -51,7 +51,7 @@ defmodule ITui.UICase do
   Lets the runtime finish what the last key set in motion, and returns the
   frame.
 
-  A popup's parting message (`ITui.Views.Popup`) is sent while the key that
+  A popup's parting message (`Atui.Popup`) is sent while the key that
   closed it is being handled, which puts it behind whatever the test has
   already asked for. One more round trip is what makes it arrive.
   """
