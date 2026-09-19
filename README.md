@@ -114,17 +114,17 @@ stores the record, so a field added to the file shows up in both:
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "priority", "done", "inserted_at", "done_at", "title"],
+  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title"],
   "sort": "id",
   "fields": [
     { "name": "title", "label": "Title", "type": "string", "required": true },
-    { "name": "description", "label": "Description" },
+    { "name": "description", "label": "Description", "lines": 4 },
     { "name": "url", "label": "URL" },
-    { "name": "priority", "label": "Priority", "type": "integer", "default": 2 },
+    { "name": "priority", "label": "Priority", "short": "P", "type": "integer", "default": 2 },
     { "name": "done", "label": "Done", "type": "boolean", "default": false },
     { "name": "id", "label": "#", "type": "integer", "form": false },
     { "name": "inserted_at", "label": "Created", "type": "datetime", "form": false },
-    { "name": "done_at", "label": "Checked off", "type": "datetime", "form": false }
+    { "name": "done_at", "label": "Checked", "type": "datetime", "form": false }
   ]
 }
 ```
@@ -140,6 +140,12 @@ Leave `columns` out and every field gets one, in the order they are declared.
 `"form": false` on a field means it is never asked for, which is what a serial
 number and a timestamp the application writes itself need. `sort` names the
 column the list starts sorted by.
+
+`lines` above one makes the form draw an `ITui.TextArea` instead of a
+single-line field: `enter` starts a new line there and `ctrl-d` saves, and what
+it holds is shown in one line wherever there is only one. `short` is for a
+label too wide to head a column — the form still says "Priority", the table
+says "P".
 
 The serial number is the `id` the repository gives a record: it counts up, and
 it is not handed out twice even when a record is deleted.
@@ -193,11 +199,11 @@ stretches — so the sort is named in the summary line as well as marked in the
 header.
 
 ```
- 4 todos, 2 done                                              sorted by # ▲
-   # ▲ │ Priority   │ Done   │ Created          │ Checked off      │ Title
- ──────┼────────────┼────────┼──────────────────┼──────────────────┼──────────────
- ▸   2 │          1 │ [ ]    │ 2026-09-19 21:26 │                  │ scheissn geh
-     3 │          5 │ [x]    │ 2026-09-19 21:28 │ 2026-09-19 22:00 │ publish iTUI
+ 4 todos, 1 done                                              sorted by # ▲
+   # ▲ │ Done   │ P   │ Created          │ Checked          │ Title
+ ──────┼────────┼─────┼──────────────────┼──────────────────┼─────────────────────
+ ▸   2 │ [x]    │   1 │ 2026-09-19 21:26 │ 2026-09-19 22:16 │ scheissn geh
+     3 │ [ ]    │   5 │ 2026-09-19 21:28 │                  │ publish iTUI to HEX
  Description: the last one before the release
 ```
 

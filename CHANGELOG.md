@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`"columns"`), and which column its list starts sorted by (`"sort"`); a field
   left out of the columns is shown beside the list, and `"form": false` on a
   field means it is never asked for.
+- `ITui.TextArea` — a field of several lines in the shape of `Atui.TextInput`,
+  which a schema asks for with `"lines"`. Inside one, `enter` starts a new line
+  and `ctrl-d` saves the form; what it holds is shown in one line wherever
+  there is only one.
+- A field can carry a `"short"` label for a column too narrow for its own.
 - The todo list is a sortable, ruled table — `←`/`→` move the sort from column
   to column, `r` turns it the other way up, `R` re-reads the file — with a
   serial number, `description` and `url` fields, a `Created` column and a

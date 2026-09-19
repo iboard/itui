@@ -12,6 +12,13 @@ defmodule ITui.Views.FormTest do
   ]}
   """
 
+  @multiline """
+  {"name": "note", "label": "Note", "fields": [
+    {"name": "title", "label": "Title", "required": true},
+    {"name": "body", "label": "Body", "lines": 3, "placeholder": "say something"}
+  ]}
+  """
+
   setup do
     {:ok, schema} = Schema.parse(@schema)
 
@@ -99,6 +106,69 @@ defmodule ITui.Views.FormTest do
     press(ui, :esc)
 
     assert result(ui) == :cancelled
+  end
+
+  describe "a field of several lines" do
+    setup do
+      {:ok, schema} = Schema.parse(@multiline)
+
+      %{ui: start_ui(Form, schema: schema, size: {70, 16})}
+    end
+
+    test "is drawn over as many rows as the schema gives it", %{ui: ui} do
+      screen = text(ui)
+
+      assert screen =~ "Body"
+      assert screen =~ "say something"
+      assert screen =~ "enter save"
+
+      press(ui, :tab)
+      assert text(ui) =~ "ctrl-d save"
+    end
+
+    test "enter starts a new line instead of saving", %{ui: ui} do
+      press(ui, :tab)
+      type(ui, "one")
+      press(ui, :enter)
+      screen = type(ui, "two")
+
+      assert screen =~ "one"
+      assert screen =~ "two"
+      assert result(ui) == :cancelled
+      assert Runtime.view_stack(ui) == [Form]
+    end
+
+    test "ctrl-d saves from inside it", %{ui: ui} do
+      type(ui, "A note")
+      press(ui, :tab)
+      type(ui, "first")
+      press(ui, :enter)
+      type(ui, "second")
+      press(ui, {[:ctrl], "d"})
+
+      assert result(ui) == {:submitted, %{title: "A note", body: "first\nsecond"}}
+    end
+
+    test "the arrows walk within it, and out of it at its edges", %{ui: ui} do
+      press(ui, :tab)
+      type(ui, "one")
+      press(ui, :enter)
+      type(ui, "two")
+
+      # Up once stays inside the field, twice leaves it.
+      press(ui, :up)
+      assert Runtime.view_state(ui, Form).focus == 1
+
+      press(ui, :up)
+      assert Runtime.view_state(ui, Form).focus == 0
+    end
+
+    test "enter on a single-line field still saves", %{ui: ui} do
+      type(ui, "A note")
+      press(ui, :enter)
+
+      assert result(ui) == {:submitted, %{title: "A note", body: ""}}
+    end
   end
 
   test "a form with no fields is still a form", %{schema: _schema} do

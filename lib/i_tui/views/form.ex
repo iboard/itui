@@ -9,7 +9,9 @@ defmodule ITui.Views.Form do
 
   Text fields are `Atui.TextInput`s and take the editing keys a readline user
   expects. A boolean field is a toggle instead, flipped with space, because a
-  yes/no question deserves less than a text field.
+  yes/no question deserves less than a text field. A field the schema gives
+  more than one line to is an `ITui.TextArea`, where `enter` starts a new line
+  rather than saving — `tab` moves on, and `ctrl-d` saves from anywhere.
 
   Nothing is submitted until every field casts: `enter` shows all of the
   mistakes at once and stays open, so a form is never half-accepted. A field
@@ -20,13 +22,15 @@ defmodule ITui.Views.Form do
 
     * `tab`, `↓` / `shift-tab`, `↑` — the next field, the previous one
     * `space` — flip the toggle the cursor is on
-    * `enter` — save
+    * `enter` — save, or a new line inside a field of several
+    * `ctrl-d` — save, wherever the cursor is
     * `esc` — cancel
   """
 
   use Atui.View
 
   alias Atui.{Layout, Style, Text, TextInput}
+  alias ITui.TextArea
   alias ITui.Schema
   alias ITui.Schema.{Boolean, Field}
   alias ITui.Views.Popup
@@ -55,18 +59,37 @@ defmodule ITui.Views.Form do
     Rect.centered(
       viewport,
       clamp(label_width(state) + 48, 44, viewport.width - 4),
-      clamp(length(state.widgets) + length(state.errors) + 5, 8, viewport.height - 2)
+      clamp(rows(state) + length(state.errors) + 5, 8, viewport.height - 2)
     )
   end
 
   @impl Atui.View
   def handle_key(:esc, state), do: {:pop, %{state | result: :cancelled}}
-  def handle_key(:enter, state), do: submit(state)
+  def handle_key({[:ctrl], "d"}, state), do: submit(state)
 
-  def handle_key(key, state) when key in [:tab, :down], do: {:ok, focus(state, 1)}
-  def handle_key(key, state) when key in [{[:shift], :tab}, :up], do: {:ok, focus(state, -1)}
+  # Inside a field of several lines, enter is a new line rather than the end
+  # of the form; ctrl-d is what saves from there.
+  def handle_key(:enter, state) do
+    case focused(state) do
+      %{input: %TextArea{}} -> delegate(state, :enter)
+      _otherwise -> submit(state)
+    end
+  end
 
-  def handle_key(key, state) do
+  def handle_key(:tab, state), do: {:ok, focus(state, 1)}
+  def handle_key({[:shift], :tab}, state), do: {:ok, focus(state, -1)}
+
+  # The arrows walk within a field first, and out of it at its edges.
+  def handle_key(key, state) when key in [:up, :down] do
+    case delegate(state, key) do
+      {:pass, state} -> {:ok, focus(state, if(key == :up, do: -1, else: 1))}
+      reply -> reply
+    end
+  end
+
+  def handle_key(key, state), do: delegate(state, key)
+
+  defp delegate(state, key) do
     case focused(state) do
       %{input: nil} = widget -> toggle(state, widget, key)
       %{input: input} = widget -> edit(state, widget, input, key)
@@ -77,15 +100,18 @@ defmodule ITui.Views.Form do
   @impl Atui.View
   def render(state, rect) do
     {body, footer} = rect |> Rect.inset(1) |> Layout.split_bottom(1)
-    {rows, messages} = Layout.split_top(body, length(state.widgets))
+    {fields, messages} = Layout.split_top(body, rows(state))
 
     state.widgets
     |> Enum.with_index()
-    |> Enum.reduce(blank(state, rect), fn {widget, index}, screen ->
-      row(screen, state, widget, index, %{rows | y: rows.y + index, height: 1})
+    |> Enum.reduce({blank(state, rect), fields.y}, fn {widget, index}, {screen, y} ->
+      height = height(widget)
+
+      {row(screen, state, widget, index, %{fields | y: y, height: height}), y + height}
     end)
+    |> elem(0)
     |> errors(state, messages)
-    |> Screen.put_text(footer.x + 1, footer.y, keys(footer.width - 2), dim())
+    |> Screen.put_text(footer.x + 1, footer.y, keys(state, footer.width - 2), dim())
   end
 
   @impl Atui.View
@@ -100,6 +126,16 @@ defmodule ITui.Views.Form do
     %{field: field, input: nil, checked: starting_value(field, values) == true}
   end
 
+  defp widget(%Field{lines: lines} = field, values) when lines > 1 do
+    value = Field.format(field, starting_value(field, values))
+
+    %{
+      field: field,
+      input: TextArea.new(value: value, placeholder: field.placeholder || ""),
+      checked: nil
+    }
+  end
+
   defp widget(%Field{} = field, values) do
     value = Field.format(field, starting_value(field, values))
 
@@ -109,6 +145,10 @@ defmodule ITui.Views.Form do
       checked: nil
     }
   end
+
+  defp height(%{field: field}), do: field.lines
+
+  defp rows(state), do: state.widgets |> Enum.map(&height/1) |> Enum.sum()
 
   defp starting_value(field, values), do: Map.get(values, field.key, Field.default(field))
 
@@ -126,6 +166,14 @@ defmodule ITui.Views.Form do
     box = if widget.checked, do: "[x] yes", else: "[ ] no"
 
     Screen.put_text(screen, rect.x, rect.y, box, if(focused?, do: focus_style()))
+  end
+
+  defp value(screen, %{input: %TextArea{} = area}, rect, focused?) do
+    TextArea.draw(screen, area, rect,
+      focus: focused?,
+      placeholder_style: dim(),
+      style: if(focused?, do: focus_style())
+    )
   end
 
   defp value(screen, %{input: input}, rect, focused?) do
@@ -148,11 +196,20 @@ defmodule ITui.Views.Form do
     end)
   end
 
-  defp keys(width) do
-    Text.first_fitting(
-      ["tab next · space toggle · enter save · esc cancel", "tab · enter save · esc"],
-      width
-    )
+  defp keys(state, width) do
+    case focused(state) do
+      %{input: %TextArea{}} ->
+        Text.first_fitting(
+          ["enter new line · tab next · ctrl-d save · esc cancel", "tab · ctrl-d save · esc"],
+          width
+        )
+
+      _otherwise ->
+        Text.first_fitting(
+          ["tab next · space toggle · enter save · esc cancel", "tab · enter save · esc"],
+          width
+        )
+    end
   end
 
   # Only the fields that were drawn are cast, and only they come back: a
@@ -174,6 +231,7 @@ defmodule ITui.Views.Form do
   defp params(state) do
     Map.new(state.widgets, fn
       %{field: field, input: nil, checked: checked} -> {field.name, checked}
+      %{field: field, input: %TextArea{} = area} -> {field.name, TextArea.value(area)}
       %{field: field, input: input} -> {field.name, TextInput.value(input)}
     end)
   end
@@ -183,6 +241,13 @@ defmodule ITui.Views.Form do
   end
 
   defp toggle(state, _widget, _key), do: {:pass, state}
+
+  defp edit(state, widget, %TextArea{} = area, key) do
+    case TextArea.handle_key(area, key) do
+      {:ok, area} -> {:ok, put_widget(state, %{widget | input: area})}
+      {:pass, _area} -> {:pass, state}
+    end
+  end
 
   defp edit(state, widget, input, key) do
     case TextInput.handle_key(input, key) do

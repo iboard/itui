@@ -3,7 +3,7 @@
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "columns": ["id", "priority", "done", "inserted_at", "done_at", "title"],
+  "columns": ["id", "done", "priority", "inserted_at", "done_at", "title"],
   "sort": "id",
   "fields": [
     {
@@ -17,6 +17,7 @@
       "name": "description",
       "label": "Description",
       "type": "string",
+      "lines": 4,
       "placeholder": "what it is about"
     },
     {
@@ -28,6 +29,7 @@
     {
       "name": "priority",
       "label": "Priority",
+      "short": "P",
       "type": "integer",
       "default": 2,
       "placeholder": "1 is highest"
@@ -52,7 +54,7 @@
     },
     {
       "name": "done_at",
-      "label": "Checked off",
+      "label": "Checked",
       "type": "datetime",
       "form": false
     }

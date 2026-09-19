@@ -215,6 +215,16 @@ defmodule ITui.SchemaTest do
       assert Schema.detail_fields(schema) == []
     end
 
+    test "rejects lines that are not a count" do
+      json = ~s({"name": "t", "fields": [{"name": "a", "lines": 0}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the lines of "a" must be a whole number above zero)
+
+      json = ~s({"name": "t", "fields": [{"name": "a", "lines": "many"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ "must be a whole number above zero"
+    end
+
     test "rejects columns that are not fields" do
       json = ~s({"name": "t", "columns": ["a", "z"], "fields": [{"name": "a"}]})
       assert {:error, message} = Schema.parse(json)
@@ -292,7 +302,14 @@ defmodule ITui.SchemaTest do
 
       # The table reads in a different order from the form that fills it.
       assert Enum.map(Schema.list_fields(schema), & &1.name) ==
-               ["id", "priority", "done", "inserted_at", "done_at", "title"]
+               ["id", "done", "priority", "inserted_at", "done_at", "title"]
+
+      # A label too wide for a column has a short one; a long field has lines.
+      assert Schema.field(schema, :priority) |> Field.short() == "P"
+      assert Schema.field(schema, :title) |> Field.short() == "Title"
+      assert Schema.field(schema, :description).lines == 4
+      assert Field.multiline?(Schema.field(schema, :description))
+      refute Field.multiline?(Schema.field(schema, :title))
 
       assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
 

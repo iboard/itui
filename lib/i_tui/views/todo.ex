@@ -235,7 +235,7 @@ defmodule ITui.Views.Todo do
     todos
     |> Enum.map(&String.length(cell(field, &1)))
     |> Enum.max(fn -> 0 end)
-    |> max(String.length(field.label) + 2)
+    |> max(String.length(Field.short(field)) + 2)
     |> min(@max_column)
   end
 
@@ -279,7 +279,7 @@ defmodule ITui.Views.Todo do
   end
 
   defp heading(state, field, width) do
-    Screen.truncate(field.label <> marker(state, field), width)
+    Screen.truncate(Field.short(field) <> marker(state, field), width)
   end
 
   defp marker(%{sort: %{by: key, direction: :asc}}, %{key: key}), do: " ▲"
@@ -341,7 +341,7 @@ defmodule ITui.Views.Todo do
     if todo[field.key] == true, do: "[x]", else: "[ ]"
   end
 
-  defp cell(field, todo), do: Field.format(field, todo[field.key])
+  defp cell(field, todo), do: field |> Field.format(todo[field.key]) |> one_line()
 
   ## What does not fit in a column
 
@@ -361,12 +361,15 @@ defmodule ITui.Views.Todo do
       todo ->
         state.schema
         |> Schema.detail_fields()
-        |> Enum.map(fn field -> {field, Field.format(field, todo[field.key])} end)
+        |> Enum.map(fn field -> {field, one_line(Field.format(field, todo[field.key]))} end)
         |> Enum.reject(fn {_field, value} -> value == "" end)
         |> Enum.map_join(" · ", fn {field, value} -> "#{field.label}: #{value}" end)
         |> Screen.truncate(width)
     end
   end
+
+  # A field of several lines has to say what it says in one, down here.
+  defp one_line(value), do: value |> String.replace(~r/\s+/u, " ") |> String.trim()
 
   defp keys(%{error: error}, _width) when is_binary(error), do: "esc back"
 

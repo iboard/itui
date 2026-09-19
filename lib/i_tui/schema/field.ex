@@ -16,12 +16,17 @@ defmodule ITui.Schema.Field do
       {
         "name": "title",          // required: the key in the record
         "label": "Title",         // optional: what the form calls it
+        "short": "T",             // optional: what a column calls it
         "type": "string",         // string (default), integer, boolean, datetime
         "required": true,         // optional
         "default": "",            // optional: the value before anything is typed
         "placeholder": "what to do",
-        "form": false             // optional: never asked for
+        "form": false,            // optional: never asked for
+        "lines": 4                // optional: a field of several lines
       }
+
+  `lines` above one makes the form draw an `ITui.TextArea` instead of a
+  single-line field, and `short` is for a label too wide to head a column.
 
   `form` is what a field says about where it belongs: a timestamp the
   application writes itself is `"form": false`, because there is nothing to
@@ -35,22 +40,26 @@ defmodule ITui.Schema.Field do
     :name,
     :key,
     :label,
+    :short,
     :default,
     :placeholder,
     type: :string,
     required: false,
-    form: true
+    form: true,
+    lines: 1
   ]
 
   @type t :: %__MODULE__{
           name: String.t(),
           key: atom(),
           label: String.t(),
+          short: String.t() | nil,
           type: Ecto.Type.t(),
           required: boolean(),
           default: term(),
           placeholder: String.t() | nil,
-          form: boolean()
+          form: boolean(),
+          lines: pos_integer()
         }
 
   @types %{
@@ -67,19 +76,23 @@ defmodule ITui.Schema.Field do
   def from_map(%{} = map) do
     with {:ok, name} <- name(map),
          {:ok, type} <- type(map, name) do
-      field = %__MODULE__{
-        name: name,
-        # Field names come from the application's own schema files, a list as
-        # bounded as the files themselves — not from anything a user types.
-        key: String.to_atom(name),
-        label: label(map, name),
-        type: type,
-        required: map["required"] == true,
-        placeholder: placeholder(map),
-        form: map["form"] != false
-      }
+      with {:ok, lines} <- lines(map, name) do
+        field = %__MODULE__{
+          name: name,
+          # Field names come from the application's own schema files, a list as
+          # bounded as the files themselves — not from anything a user types.
+          key: String.to_atom(name),
+          label: label(map, name),
+          short: string(map["short"]),
+          type: type,
+          required: map["required"] == true,
+          placeholder: placeholder(map),
+          form: map["form"] != false,
+          lines: lines
+        }
 
-      default(field, map)
+        default(field, map)
+      end
     end
   end
 
@@ -95,6 +108,24 @@ defmodule ITui.Schema.Field do
   """
   @spec cast(t(), term()) :: {:ok, term()} | :error
   def cast(%__MODULE__{type: type}, value), do: Ecto.Type.cast(type, value)
+
+  @doc """
+  What a column calls the field: its `short` label, or its label.
+
+      iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "priority", "short" => "P"})
+      iex> {ITui.Schema.Field.short(field), field.label}
+      {"P", "Priority"}
+
+  """
+  @spec short(t()) :: String.t()
+  def short(%__MODULE__{short: nil, label: label}), do: label
+  def short(%__MODULE__{short: short}), do: short
+
+  @doc """
+  True for a field the form gives more than one line to.
+  """
+  @spec multiline?(t()) :: boolean()
+  def multiline?(%__MODULE__{lines: lines}), do: lines > 1
 
   @doc """
   The message a form shows when a value will not cast.
@@ -177,4 +208,15 @@ defmodule ITui.Schema.Field do
 
   defp placeholder(%{"placeholder" => text}) when is_binary(text), do: text
   defp placeholder(_map), do: nil
+
+  defp lines(%{"lines" => lines}, _name) when is_integer(lines) and lines > 0, do: {:ok, lines}
+
+  defp lines(%{"lines" => lines}, name) when not is_nil(lines) do
+    {:error, ~s(the lines of "#{name}" must be a whole number above zero, got: #{inspect(lines)})}
+  end
+
+  defp lines(_map, _name), do: {:ok, 1}
+
+  defp string(value) when is_binary(value) and value != "", do: value
+  defp string(_value), do: nil
 end

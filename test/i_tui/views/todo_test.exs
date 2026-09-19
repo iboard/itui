@@ -6,12 +6,12 @@ defmodule ITui.Views.TodoTest do
 
   @schema """
   {"name": "todo", "label": "Todo", "title": "Todos",
-   "columns": ["id", "priority", "done", "inserted_at", "done_at", "title"],
+   "columns": ["id", "done", "priority", "inserted_at", "done_at", "title"],
    "sort": "inserted_at",
    "fields": [
     {"name": "title", "label": "Title", "required": true, "placeholder": "what to do"},
-    {"name": "description", "label": "Description"},
-    {"name": "priority", "label": "Priority", "type": "integer", "default": 2},
+    {"name": "description", "label": "Description", "lines": 3},
+    {"name": "priority", "label": "Priority", "short": "P", "type": "integer", "default": 2},
     {"name": "done", "label": "Done", "type": "boolean", "default": false},
     {"name": "id", "label": "#", "type": "integer", "form": false},
     {"name": "inserted_at", "label": "Created", "type": "datetime", "form": false},
@@ -58,9 +58,12 @@ defmodule ITui.Views.TodoTest do
   describe "the columns" do
     test "are the ones the schema names, in the order it names them", %{ui: ui} do
       add(ui, "Write the docs")
-      headings = text(ui) |> row("Priority")
+      headings = text(ui) |> row("Checked off")
 
-      assert headings =~ ~r/#.*Priority.*Done.*Created.*Checked off.*Title/
+      assert headings =~ ~r/#.*Done.*P.*Created.*Checked off.*Title/
+
+      # A label too wide for a column is headed by its short one.
+      refute headings =~ "Priority"
 
       # A field the columns leave out is not one of them.
       refute headings =~ "Description"
@@ -70,7 +73,7 @@ defmodule ITui.Views.TodoTest do
       add(ui, "Write the docs")
       screen = text(ui)
 
-      assert screen |> row("Priority") =~ "│"
+      assert screen |> row("Checked off") =~ "│"
       assert screen |> row("Write the docs") =~ "│"
 
       # The rule meets the box on both sides and the dividers where they cross.
@@ -189,16 +192,16 @@ defmodule ITui.Views.TodoTest do
     end
 
     test "the arrows walk the sort along the columns", %{ui: ui} do
-      assert press(ui, :left) =~ "Done ▲"
-
-      assert press(ui, :left) =~ "Priority ▲"
+      assert press(ui, :left) =~ "P ▲"
       assert titles(ui) == ["alpha", "Beta"]
+
+      assert press(ui, :left) =~ "Done ▲"
 
       assert press(ui, :left) =~ "# ▲"
       assert titles(ui) == ["Beta", "alpha"]
 
       # And around the other way.
-      assert press(ui, :right) =~ "Priority ▲"
+      assert press(ui, :right) =~ "Done ▲"
       assert press(ui, [:right, :right, :right, :right]) =~ "Title ▲"
       assert titles(ui) == ["alpha", "Beta"]
     end
@@ -238,11 +241,14 @@ defmodule ITui.Views.TodoTest do
     add(ui, "Write the docs")
     press(ui, :enter)
     press(ui, [:tab])
-    type(ui, "the ones in the readme")
+    type(ui, "the ones in the readme,")
     press(ui, :enter)
+    type(ui, "and the moduledocs")
+    press(ui, {[:ctrl], "d"})
     screen = settle(ui)
 
-    assert screen =~ "Description: the ones in the readme"
+    # A description of several lines has to say it in one, down there.
+    assert screen =~ "Description: the ones in the readme, and the moduledocs"
     refute screen |> row("Write the docs") =~ "readme"
   end
 
