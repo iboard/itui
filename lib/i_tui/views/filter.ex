@@ -7,8 +7,11 @@ defmodule ITui.Views.Filter do
   already says it. Each carries how many there are of it, because hiding a
   band of nothing is worth knowing before you go looking for what moved.
 
-  It is pushed by `ITui.Views.Todo` and, on the way out, hands back the set of
-  kinds to hide (see `ITui.Views.Popup`).
+  It is pushed by `ITui.Views.Todo`, and every change goes straight back to it
+  — the list behind the popup is filtered as the boxes are ticked, not when
+  the popup closes, because seeing what a filter does is most of choosing it.
+  The set of kinds to hide goes back again on the way out (see
+  `ITui.Views.Popup`).
 
   ## Keys
 
@@ -48,8 +51,8 @@ defmodule ITui.Views.Filter do
   def handle_key(key, state) when key in [:esc, :enter], do: {:pop, state}
   def handle_key(key, state) when key in [:up, {:char, "k"}], do: {:ok, move(state, -1)}
   def handle_key(key, state) when key in [:down, {:char, "j"}], do: {:ok, move(state, 1)}
-  def handle_key({:char, " "}, state), do: {:ok, toggle(state)}
-  def handle_key({:char, "a"}, state), do: {:ok, %{state | hidden: MapSet.new()}}
+  def handle_key({:char, " "}, state), do: {:ok, announce(toggle(state))}
+  def handle_key({:char, "a"}, state), do: {:ok, announce(%{state | hidden: MapSet.new()})}
   def handle_key(_key, state), do: {:pass, state}
 
   @impl Atui.View
@@ -98,6 +101,12 @@ defmodule ITui.Views.Filter do
       ],
       width
     )
+  end
+
+  defp announce(state) do
+    Popup.tell(state.notify, {:filter_changed, state.hidden})
+
+    state
   end
 
   defp toggle(state) do

@@ -132,6 +132,12 @@ defmodule ITui.Views.Todo do
     {:ok, state |> save(attrs) |> Map.put(:editing, nil)}
   end
 
+  # The filter is still open: the list is being changed under it, as it is
+  # ticked rather than when it closes.
+  def handle_event({:filter_changed, hidden}, state) do
+    {:ok, refresh(%{state | hidden: hidden})}
+  end
+
   def handle_event({:popup_closed, Filter, {:hidden, hidden}}, state) do
     {:ok, refresh(%{state | hidden: hidden, editing: nil})}
   end

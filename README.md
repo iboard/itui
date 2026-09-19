@@ -244,7 +244,9 @@ takes the date away again.
 Those bands are also what `f` hides and shows, so what is being hidden is
 named the way the screen already says it — and each is listed with how many
 there are of it, because hiding a band of nothing is worth knowing before you
-go looking for what moved. The summary then reads `5 of 7 todos`.
+go looking for what moved. The list behind the popup is filtered as the boxes
+are ticked rather than when it closes, and the summary reads `5 of 7 todos`
+while anything is hidden.
 
 Today's date is at the top of the screen, because it is what all of that is
 reckoned from — the same value the colours are worked out with, not a second

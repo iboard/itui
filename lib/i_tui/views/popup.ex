@@ -18,6 +18,22 @@ defmodule ITui.Views.Popup do
   @type result :: :ok | :cancelled | {:submitted, map()}
 
   @doc """
+  Tells `notify` something while the popup is still open.
+
+  The same delivery as `closed/3`, for a popup whose work is worth watching as
+  it happens rather than only when it is over — a filter, say, with the list it
+  filters still on the screen behind it.
+  """
+  @spec tell(module() | nil, term()) :: :ok
+  def tell(nil, _message), do: :ok
+
+  def tell(notify, message) when is_atom(notify) do
+    Atui.Runtime.send_event_to(self(), notify, message)
+
+    :ok
+  end
+
+  @doc """
   Tells `notify` that `module` has closed. Call it from `unmount/1`.
   """
   @spec closed(module() | nil, module(), result()) :: :ok

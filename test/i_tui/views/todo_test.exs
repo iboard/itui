@@ -595,6 +595,36 @@ defmodule ITui.Views.TodoShowingTest do
       assert screen =~ "[x] No due date"
     end
 
+    test "the list changes as the boxes are ticked, not when the popup closes", %{ui: ui} do
+      press(ui, {:char, "f"})
+
+      assert titles(ui) == [
+               "Overdue",
+               "Tomorrow",
+               "Thursday",
+               "Next month",
+               "Whenever",
+               "Finished"
+             ]
+
+      press(ui, {:char, " "})
+      screen = settle(ui)
+
+      # The popup is still open, and the list behind it has already changed.
+      assert Runtime.view_stack(ui) == [Filter, Todo]
+      assert screen =~ "5 of 6 todos"
+      assert titles(ui) == ["Overdue", "Tomorrow", "Thursday", "Next month", "Whenever"]
+
+      press(ui, [:down, {:char, " "}])
+      assert settle(ui) =~ "4 of 6 todos"
+      assert titles(ui) == ["Tomorrow", "Thursday", "Next month", "Whenever"]
+
+      # And a shows them all again, there and then.
+      press(ui, {:char, "a"})
+      assert settle(ui) =~ "6 todos, 1 done"
+      assert length(titles(ui)) == 6
+    end
+
     test "hiding a kind takes it off the list, and says so in the summary", %{ui: ui} do
       assert text(ui) =~ "6 todos, 1 done"
 
