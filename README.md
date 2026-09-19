@@ -203,14 +203,19 @@ is not a dependency, and nothing here talks to one.
 ### The todo list
 
 `data/schemas/todo.json` and the `Todos` menu entry are the whole application:
-`a` adds, `enter` edits, `space` marks one done, `d` then `y` deletes, `R`
-re-reads the file. Nothing in `ITui.Views.Todo` mentions a title or a priority.
+`a` adds, `enter` edits, `space` marks one done, `d` then `y` deletes, `t`
+switches the dates between how they are written and how they stand from today,
+`f` chooses which kinds are shown, `R` re-reads the file. Nothing in `ITui.Views.Todo` mentions a title or a priority.
 
 The list is a table of the columns the schema declares. `←`/`→` move the sort
 from one column to the next and `r` turns it the other way up. A column too
 wide for the terminal is dropped rather than half-drawn — never the one that
 stretches — so the sort is named in the summary line as well as marked in the
 header.
+
+`t` writes every date as it stands from today instead — `+3 days`, `-2 weeks`,
+`today` — in the coarsest unit that still means something, which is days up to
+a fortnight, then weeks, then months.
 
 ```
  Sat 2026-09-19 · 4 todos, 1 done                             sorted by # ▲
@@ -235,6 +240,11 @@ takes the date away again.
 | orange | due within what is left of this calendar week |
 | white | due later than that but still this month, or not due on any particular day |
 | light blue | due beyond the end of this month |
+
+Those bands are also what `f` hides and shows, so what is being hidden is
+named the way the screen already says it — and each is listed with how many
+there are of it, because hiding a band of nothing is worth knowing before you
+go looking for what moved. The summary then reads `5 of 7 todos`.
 
 Today's date is at the top of the screen, because it is what all of that is
 reckoned from — the same value the colours are worked out with, not a second

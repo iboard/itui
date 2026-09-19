@@ -457,10 +457,10 @@ defmodule ITui.Views.TodoColourTest do
              {"In two days", :soon},
              {"Later this week", :week},
              {"Sunday, the last of it", :week},
-             {"Next week", :plain},
-             {"The last of the month", :plain},
+             {"Next week", :month},
+             {"The last of the month", :month},
              {"The first of the next", :later},
-             {"Whenever", :plain},
+             {"Whenever", :none},
              {"Done, and was overdue", :done}
            ]
   end
@@ -513,6 +513,148 @@ defmodule ITui.Views.TodoColourTest do
 
     assert screen =~ "Due must be a date, as 2026-09-25"
     assert Repo.all(schema) == {:ok, []}
+  end
+end
+
+defmodule ITui.Views.TodoShowingTest do
+  use ITui.UICase, async: false
+
+  alias ITui.{Repo, Schema}
+  alias ITui.Views.{Filter, Todo}
+
+  @today ~D[2026-09-14]
+
+  @schema """
+  {"name": "todo", "label": "Todo", "columns": ["id", "done", "due", "title"], "sort": "id",
+   "fields": [
+    {"name": "title", "label": "Title", "required": true},
+    {"name": "due", "label": "Due", "type": "date"},
+    {"name": "done", "label": "Done", "type": "boolean", "default": false},
+    {"name": "id", "label": "#", "type": "integer", "form": false}
+  ]}
+  """
+
+  setup do
+    source = Path.join(System.tmp_dir!(), "i_tui_#{System.unique_integer([:positive])}.json")
+    on_exit(fn -> File.rm(source) end)
+
+    {:ok, schema} = Schema.parse(@schema)
+    schema = %{schema | source: source}
+
+    for attrs <- [
+          %{"title" => "Overdue", "due" => "2026-09-09"},
+          %{"title" => "Tomorrow", "due" => "2026-09-15"},
+          %{"title" => "Thursday", "due" => "2026-09-17"},
+          %{"title" => "Next month", "due" => "2026-10-24"},
+          %{"title" => "Whenever"},
+          %{"title" => "Finished", "done" => true}
+        ] do
+      {:ok, _record} = Repo.insert(schema, attrs)
+    end
+
+    %{schema: schema, ui: start_ui(Todo, schema: schema, today: @today, size: {80, 16})}
+  end
+
+  defp titles(ui) do
+    ui |> Runtime.view_state(Todo) |> Map.fetch!(:todos) |> Enum.map(& &1[:title])
+  end
+
+  describe "t, for how the dates are written" do
+    test "turns them into how they stand from today, and back", %{ui: ui} do
+      assert text(ui) =~ "2026-09-15"
+
+      screen = press(ui, {:char, "t"})
+      assert screen =~ "-5 days"
+      assert screen =~ "+1 day"
+      assert screen =~ "+3 days"
+      assert screen =~ "+6 weeks"
+      refute screen =~ "2026-09-15"
+
+      assert press(ui, {:char, "t"}) =~ "2026-09-15"
+    end
+
+    test "leaves a todo with no date with nothing to say", %{ui: ui} do
+      line =
+        ui
+        |> press({:char, "t"})
+        |> String.split("\r\n")
+        |> Enum.find("", &(&1 =~ "Whenever"))
+
+      refute line =~ "day"
+      refute line =~ "today"
+    end
+  end
+
+  describe "f, for which kinds are shown" do
+    test "opens on the bands, with how many there are of each", %{ui: ui} do
+      screen = press(ui, {:char, "f"})
+
+      assert Runtime.view_stack(ui) == [Filter, Todo]
+      assert screen =~ "Show"
+      assert screen =~ "[x] Overdue"
+      assert screen =~ "[x] No due date"
+    end
+
+    test "hiding a kind takes it off the list, and says so in the summary", %{ui: ui} do
+      assert text(ui) =~ "6 todos, 1 done"
+
+      press(ui, {:char, "f"})
+      # Done is the first band.
+      press(ui, {:char, " "})
+      press(ui, :esc)
+      screen = settle(ui)
+
+      assert Runtime.view_stack(ui) == [Todo]
+      assert screen =~ "5 of 6 todos"
+      refute screen =~ "Finished"
+      assert titles(ui) == ["Overdue", "Tomorrow", "Thursday", "Next month", "Whenever"]
+    end
+
+    test "hiding several of them, and showing them all again", %{ui: ui} do
+      press(ui, {:char, "f"})
+      press(ui, [{:char, " "}, :down, {:char, " "}, :down, :down, :down, :down, {:char, " "}])
+      press(ui, :esc)
+      settle(ui)
+
+      assert titles(ui) == ["Tomorrow", "Thursday", "Whenever"]
+      assert text(ui) =~ "3 of 6 todos"
+
+      press(ui, {:char, "f"})
+      press(ui, {:char, "a"})
+      press(ui, :esc)
+      screen = settle(ui)
+
+      assert length(titles(ui)) == 6
+      assert screen =~ "6 todos, 1 done"
+    end
+
+    test "what is hidden stays hidden when the file is read again", %{ui: ui, schema: schema} do
+      press(ui, {:char, "f"})
+      press(ui, {:char, " "})
+      press(ui, :esc)
+      settle(ui)
+
+      {:ok, _record} = Repo.insert(schema, %{"title" => "Added later"})
+
+      screen = press(ui, {:char, "R"})
+
+      assert screen =~ "Added later"
+      refute screen =~ "Finished"
+      assert screen =~ "6 of 7 todos"
+    end
+
+    test "the cursor stays on the todo it was on", %{ui: ui} do
+      press(ui, [:down, :down])
+      assert text(ui) =~ "▸"
+      assert Enum.at(titles(ui), Runtime.view_state(ui, Todo).cursor) == "Thursday"
+
+      press(ui, {:char, "f"})
+      press(ui, {:char, " "})
+      press(ui, :esc)
+      settle(ui)
+
+      assert Enum.at(titles(ui), Runtime.view_state(ui, Todo).cursor) == "Thursday"
+    end
   end
 end
 

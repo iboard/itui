@@ -78,6 +78,35 @@ defmodule ITui.Schema.Date do
 
   def parse(_value), do: nil
 
+  @doc """
+  A day as it stands from another one: `+3 days`, `-2 weeks`, `today`.
+
+  The further off a day is, the coarser the unit it is worth saying in — a
+  fortnight is easier to weigh up than fourteen days, and five months easier
+  than a hundred and fifty.
+
+      iex> ITui.Schema.Date.relative(~D[2026-09-21], ~D[2026-09-19])
+      "+2 days"
+
+      iex> ITui.Schema.Date.relative(~D[2026-09-05], ~D[2026-09-19])
+      "-2 weeks"
+
+      iex> ITui.Schema.Date.relative(~D[2026-09-19], ~D[2026-09-19])
+      "today"
+
+  """
+  @spec relative(Date.t() | nil, Date.t()) :: String.t()
+  def relative(nil, _today), do: ""
+
+  def relative(%Date{} = date, %Date{} = today) do
+    case Date.diff(date, today) do
+      0 -> "today"
+      days when abs(days) <= 13 -> count(days, 1, "day")
+      days when abs(days) <= 56 -> count(days, 7, "week")
+      days -> count(days, 30, "month")
+    end
+  end
+
   @doc "A day as a column shows it, which is as it is stored."
   @spec format(String.t() | nil) :: String.t()
   def format(nil), do: ""
@@ -87,6 +116,15 @@ defmodule ITui.Schema.Date do
   @doc "The width `format/1` needs, for laying out a column."
   @spec width() :: pos_integer()
   def width, do: 10
+
+  # Rounded to the nearest whole unit, and never to nothing: a day and a half
+  # away is "+1 day", not "today".
+  defp count(days, per, unit) do
+    n = max(round(abs(days) / per), 1)
+    sign = if days < 0, do: "-", else: "+"
+
+    "#{sign}#{n} #{unit}#{if n == 1, do: "", else: "s"}"
+  end
 
   defp from_timestamp(value) do
     case DateTime.from_iso8601(value) do

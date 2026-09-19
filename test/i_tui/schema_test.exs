@@ -344,6 +344,42 @@ defmodule ITui.SchemaTest do
     end
   end
 
+  describe "a day as it stands from another one" do
+    test "says it in the coarsest unit that still means something" do
+      today = ~D[2026-09-14]
+      on = fn days -> ITui.Schema.Date.relative(Date.add(today, days), today) end
+
+      assert on.(0) == "today"
+      assert on.(1) == "+1 day"
+      assert on.(-1) == "-1 day"
+      assert on.(13) == "+13 days"
+      assert on.(14) == "+2 weeks"
+      assert on.(-14) == "-2 weeks"
+      assert on.(56) == "+8 weeks"
+      assert on.(57) == "+2 months"
+      assert on.(365) == "+12 months"
+      assert ITui.Schema.Date.relative(nil, today) == ""
+    end
+
+    test "a field says it for a date and a timestamp alike, and not for the rest" do
+      json = """
+      {"name": "t", "fields": [
+        {"name": "due", "type": "date"},
+        {"name": "at", "type": "datetime"},
+        {"name": "title"}
+      ]}
+      """
+
+      {:ok, schema} = Schema.parse(json)
+      today = ~D[2026-09-14]
+
+      assert Field.relative(Schema.field(schema, :due), "2026-09-17", today) == "+3 days"
+      assert Field.relative(Schema.field(schema, :at), "2026-09-17T09:00:00Z", today) == "+3 days"
+      assert Field.relative(Schema.field(schema, :due), nil, today) == ""
+      assert Field.relative(Schema.field(schema, :title), "Write it", today) == "Write it"
+    end
+  end
+
   describe "the yes/no type" do
     test "takes the words a person types" do
       for yes <- ~w(true yes Y 1 on), do: assert(Boolean.cast(yes) == {:ok, true})

@@ -23,7 +23,8 @@ defmodule ITui.Views.Todo do
   `due` date is: red once it has gone by, yellow within two days, orange
   within what is left of this calendar week, white for the rest of this month
   and light blue beyond it — and white again for a todo that is not due on any
-  particular day. Today's date is at the top of
+  particular day. Those bands are also what `ITui.Views.Filter` hides and
+  shows, so what is being hidden is named the way the screen already says it. Today's date is at the top of
   the screen, because it is what all of that is reckoned from — the same value
   the colours are worked out with, not a second reading of the clock. The row the cursor is on keeps
   its colour and takes a background instead, so the one thing the colour says
@@ -34,6 +35,8 @@ defmodule ITui.Views.Todo do
     * `↑`/`↓` or `k`/`j` — move
     * `←`/`→` — sort by the column to the left, or to the right
     * `r` — the same column, the other way up
+    * `t` — dates as they are written, or as they stand from today
+    * `f` — which kinds of todo the list shows
     * `a` — add, `e` or `enter` — edit
     * `space` — done, or not
     * `d` then `y` — delete
@@ -46,7 +49,7 @@ defmodule ITui.Views.Todo do
   alias Atui.{Layout, Style, Text}
   alias ITui.{Repo, Schema}
   alias ITui.Schema.{Boolean, Field, Timestamp}
-  alias ITui.Views.{Form, Popup}
+  alias ITui.Views.{Filter, Form, Popup}
 
   # Two columns of room for the cursor, and one of air after it.
   @indent 3
@@ -71,8 +74,11 @@ defmodule ITui.Views.Todo do
      reload(%{
        schema: schema,
        notify: Keyword.get(opts, :notify),
+       all: [],
        todos: [],
        cursor: 0,
+       hidden: MapSet.new(),
+       relative?: false,
        # Only a test pins the day; everything else asks what it is now.
        today: Keyword.get(opts, :today),
        sort: first_sort(schema),
@@ -109,6 +115,8 @@ defmodule ITui.Views.Todo do
   def handle_key(:right, state), do: {:ok, sort_by(state, 1)}
   def handle_key({:char, "r"}, state), do: {:ok, reverse(state)}
   def handle_key({:char, "R"}, state), do: {:ok, reload(state)}
+  def handle_key({:char, "t"}, state), do: {:ok, %{state | relative?: not state.relative?}}
+  def handle_key({:char, "f"}, state), do: filter(state)
   def handle_key({:char, "a"}, state), do: add(state)
 
   def handle_key(key, state) when key in [:enter, {:char, "e"}] do
@@ -122,6 +130,10 @@ defmodule ITui.Views.Todo do
   @impl Atui.View
   def handle_event({:popup_closed, Form, {:submitted, attrs}}, state) do
     {:ok, state |> save(attrs) |> Map.put(:editing, nil)}
+  end
+
+  def handle_event({:popup_closed, Filter, {:hidden, hidden}}, state) do
+    {:ok, refresh(%{state | hidden: hidden, editing: nil})}
   end
 
   def handle_event({:popup_closed, Form, _result}, state), do: {:ok, %{state | editing: nil}}
@@ -174,9 +186,18 @@ defmodule ITui.Views.Todo do
   # because of what is left of the week this date falls in.
   defp summary(state) do
     done = Enum.count(state.todos, &done?/1)
-    count = length(state.todos)
 
-    "#{Calendar.strftime(today(state), "%a %Y-%m-%d")} · #{count} #{plural(count)}, #{done} done"
+    "#{Calendar.strftime(today(state), "%a %Y-%m-%d")} · #{counted(state)}, #{done} done"
+  end
+
+  # What is on the screen, and what is being kept from it.
+  defp counted(state) do
+    shown = length(state.todos)
+    all = length(state.all)
+
+    if shown == all,
+      do: "#{shown} #{plural(shown)}",
+      else: "#{shown} of #{all} #{plural(all)}"
   end
 
   defp plural(1), do: "todo"
@@ -253,7 +274,7 @@ defmodule ITui.Views.Todo do
 
   defp natural_width(field, todos) do
     todos
-    |> Enum.map(&String.length(cell(field, &1)))
+    |> Enum.map(&String.length(cell(%{relative?: false}, field, &1)))
     |> Enum.max(fn -> 0 end)
     |> max(String.length(Field.short(field)) + 2)
     |> min(@max_column)
@@ -352,12 +373,12 @@ defmodule ITui.Views.Todo do
     |> Screen.fill(rect, " ", style)
     |> Screen.put_text(rect.x + 1, rect.y, if(selected?, do: "▸", else: " "), style)
     |> dividers(columns, rect, "│", %{Style.new(fg: :bright_black) | bg: style.bg})
-    |> cells(columns, todo, rect, style)
+    |> cells(state, columns, todo, rect, style)
   end
 
-  defp cells(screen, columns, todo, rect, style) do
+  defp cells(screen, state, columns, todo, rect, style) do
     Enum.reduce(columns, screen, fn {field, x, width}, acc ->
-      text = Screen.truncate(cell(field, todo), width)
+      text = Screen.truncate(cell(state, field, todo), width)
       x = rect.x + @indent + x + offset(field, text, width)
 
       Screen.put_text(acc, x, rect.y, text, style)
@@ -387,6 +408,27 @@ defmodule ITui.Views.Todo do
 
   defp today(state), do: state.today || ITui.Schema.Date.local_today()
 
+  @bands [
+    {:done, "Done"},
+    {:overdue, "Overdue"},
+    {:soon, "Due within two days"},
+    {:week, "Due this week"},
+    {:month, "Due this month"},
+    {:later, "Due later"},
+    {:none, "No due date"}
+  ]
+
+  @doc false
+  # The colours, in the order the ladder goes, as `ITui.Views.Filter` lists them.
+  def bands, do: @bands
+
+  defp filter(state) do
+    counts = Enum.frequencies_by(state.all, &tone(state, &1))
+
+    {:push, Filter, [bands: @bands, counts: counts, hidden: state.hidden, notify: __MODULE__],
+     %{state | editing: :filtering}}
+  end
+
   defp due(%{schema: nil}, _todo), do: nil
 
   defp due(state, todo) do
@@ -396,14 +438,14 @@ defmodule ITui.Views.Todo do
     end
   end
 
-  defp due_tone(nil, _today), do: :plain
+  defp due_tone(nil, _today), do: :none
 
   defp due_tone(date, today) do
     cond do
       Date.before?(date, today) -> :overdue
       Date.diff(date, today) <= @soon_days -> :soon
       not Date.after?(date, Date.end_of_week(today)) -> :week
-      not Date.after?(date, Date.end_of_month(today)) -> :plain
+      not Date.after?(date, Date.end_of_month(today)) -> :month
       true -> :later
     end
   end
@@ -413,13 +455,17 @@ defmodule ITui.Views.Todo do
   defp tone_style(:soon), do: Style.new(fg: :bright_yellow)
   defp tone_style(:week), do: Style.new(fg: @orange)
   defp tone_style(:later), do: Style.new(fg: @sky)
-  defp tone_style(:plain), do: Style.new(fg: :white)
+  defp tone_style(_plain), do: Style.new(fg: :white)
 
-  defp cell(%Field{type: Boolean} = field, todo) do
+  defp cell(_state, %Field{type: Boolean} = field, todo) do
     if todo[field.key] == true, do: "[x]", else: "[ ]"
   end
 
-  defp cell(field, todo), do: field |> Field.format(todo[field.key]) |> one_line()
+  defp cell(%{relative?: true} = state, field, todo) do
+    field |> Field.relative(todo[field.key], today(state)) |> one_line()
+  end
+
+  defp cell(_state, field, todo), do: field |> Field.format(todo[field.key]) |> one_line()
 
   ## What does not fit in a column
 
@@ -481,9 +527,10 @@ defmodule ITui.Views.Todo do
   defp keys(_state, width) do
     Text.first_fitting(
       [
-        "a add · enter edit · space done · d delete · ←→ sort · r reverse · esc back",
-        "a add · enter edit · space done · d delete · ←→ sort · esc back",
-        "a · enter · space · d · ←→ · esc"
+        "a add · enter edit · space done · d delete · ←→ sort · r reverse · t dates · f filter · esc back",
+        "a add · enter edit · space done · d delete · ←→ sort · t dates · f filter · esc back",
+        "a add · enter edit · space done · d delete · t dates · f filter · esc back",
+        "a · enter · space · d · ←→ · t · f · esc"
       ],
       width
     )
@@ -512,24 +559,27 @@ defmodule ITui.Views.Todo do
       index ->
         field = Enum.at(fields, Integer.mod(index + by, length(fields)))
 
-        resort(%{state | sort: %{state.sort | by: field.key}})
+        refresh(%{state | sort: %{state.sort | by: field.key}})
     end
   end
 
   defp reverse(state) do
-    resort(%{state | sort: %{state.sort | direction: other(state.sort.direction)}})
+    refresh(%{state | sort: %{state.sort | direction: other(state.sort.direction)}})
   end
 
   defp other(:asc), do: :desc
   defp other(:desc), do: :asc
 
   # The cursor follows the todo it was on, rather than the place it was in.
-  defp resort(state) do
-    todos = sorted(state, state.todos)
-    cursor = Enum.find_index(todos, &(&1 == current(state))) || state.cursor
+  defp refresh(state) do
+    was = current(state)
+    todos = state.all |> Enum.reject(&hidden?(state, &1)) |> then(&sorted(state, &1))
+    cursor = Enum.find_index(todos, &(&1 == was)) || state.cursor
 
     %{state | todos: todos, cursor: clamp(cursor, todos)}
   end
+
+  defp hidden?(state, todo), do: MapSet.member?(state.hidden, tone(state, todo))
 
   defp sorted(%{sort: %{by: nil}}, todos), do: todos
 
@@ -639,13 +689,8 @@ defmodule ITui.Views.Todo do
 
   defp reload(state) do
     case Repo.all(state.schema) do
-      {:ok, todos} ->
-        todos = sorted(state, todos)
-
-        %{state | todos: todos, error: nil, cursor: clamp(state.cursor, todos)}
-
-      {:error, reason} ->
-        %{state | error: message(state, reason)}
+      {:ok, all} -> refresh(%{state | all: all, error: nil})
+      {:error, reason} -> %{state | error: message(state, reason)}
     end
   end
 

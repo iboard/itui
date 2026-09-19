@@ -71,6 +71,26 @@ defmodule ITui.Schema.Timestamp do
 
   def format(value), do: to_string(value)
 
+  @doc """
+  The local day a stored timestamp fell on, or `nil`.
+
+      iex> ITui.Schema.Timestamp.to_date("2026-09-19T12:00:00Z")
+      ~D[2026-09-19]
+
+  """
+  @spec to_date(String.t() | nil) :: Date.t() | nil
+  def to_date(nil), do: nil
+  def to_date(""), do: nil
+
+  def to_date(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, at, _offset} -> at |> local() |> elem(0) |> Date.from_erl!()
+      {:error, _reason} -> nil
+    end
+  end
+
+  def to_date(_value), do: nil
+
   @doc "The width `format/1` needs, for laying out a column."
   @spec width() :: pos_integer()
   def width, do: 10

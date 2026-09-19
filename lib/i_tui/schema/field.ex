@@ -160,6 +160,26 @@ defmodule ITui.Schema.Field do
   def format(%__MODULE__{}, value), do: to_string(value)
 
   @doc """
+  The value as a column shows it when it is showing dates as they stand from
+  today: `+3 days` for a date or a timestamp, and the plain value for the rest.
+
+      iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "due", "type" => "date"})
+      iex> ITui.Schema.Field.relative(field, "2026-09-21", ~D[2026-09-19])
+      "+2 days"
+
+  """
+  @spec relative(t(), term(), Date.t()) :: String.t()
+  def relative(%__MODULE__{type: ITui.Schema.Date}, value, today) do
+    value |> ITui.Schema.Date.parse() |> ITui.Schema.Date.relative(today)
+  end
+
+  def relative(%__MODULE__{type: Timestamp}, value, today) do
+    value |> Timestamp.to_date() |> ITui.Schema.Date.relative(today)
+  end
+
+  def relative(%__MODULE__{} = field, value, _today), do: format(field, value)
+
+  @doc """
   The value a field starts at when nothing has been stored: its default, or
   nothing at all — except a yes/no field, which is always one or the other.
   """
