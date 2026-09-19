@@ -2,7 +2,7 @@ defmodule ITui.Views.MainMenuTest do
   use ITui.UICase, async: false
 
   alias ITui.Menu
-  alias ITui.Views.{Form, MainMenu, Output, Todo}
+  alias ITui.Views.{About, Form, MainMenu, Output, Todo}
 
   @menu """
   {
@@ -40,7 +40,7 @@ defmodule ITui.Views.MainMenuTest do
       assert screen =~ "▸ s  System"
       assert screen =~ "q  Quit"
       assert screen =~ "2 entries →"
-      assert screen =~ "↑↓ move · enter run · q quit"
+      assert screen =~ "↑↓ move · enter run · ? about · q quit"
     end
 
     test "shows the description of the entry under the cursor", %{ui: ui} do
@@ -158,6 +158,25 @@ defmodule ITui.Views.MainMenuTest do
 
       # The menu is listening again, rather than passing everything on.
       assert press(ui, :home) =~ "▸ s  System"
+    end
+  end
+
+  describe "the about popup" do
+    test "? opens it, and esc gives the keys back", %{ui: ui} do
+      screen = press(ui, {:char, "?"})
+
+      assert Runtime.view_stack(ui) == [About, MainMenu]
+      assert screen =~ "iTUI #{ITui.version()}"
+      assert screen =~ "GPL-3.0-or-later"
+
+      press(ui, :esc)
+      assert settle(ui) =~ "▸ s  System"
+      assert Runtime.view_stack(ui) == [MainMenu]
+      assert press(ui, :down) =~ "▸ f  Files"
+    end
+
+    test "the menu says the key is there", %{ui: ui} do
+      assert text(ui) =~ "? about"
     end
   end
 

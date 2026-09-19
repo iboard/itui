@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing else.
 - Menu entries can open an application (`"view"`) and can ask for a command's
   arguments first (`"form"`), filling the `{{placeholders}}` in its arguments.
+- `ITui.Views.About` — `?` on the menu says what iTUI is and what it is built
+  on, reading the version and the description from the application spec.
 
 ### Changed
 

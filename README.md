@@ -60,6 +60,7 @@ Ctrl-C reach the application instead of opening the BEAM's BREAK menu. Plain
 | `enter`, `→` | open a submenu, or run the command |
 | an entry's own key | the same, without moving first |
 | `esc`, `←`, `backspace` | back out of a submenu |
+| `?` | what this is, and what it is built on |
 | `q` | quit |
 
 While a command's output is open, the arrows and `page up`/`page down` scroll
@@ -189,7 +190,7 @@ lib/i_tui/menu.ex        the menu file, parsed
 lib/i_tui/command.ex     a system command, and the running of it
 lib/i_tui/schema.ex      a schema file, parsed, and its Ecto changesets
 lib/i_tui/repo.ex        where records live, behind one interface
-lib/i_tui/views/         the ATUI views: menu, output, form, todo list
+lib/i_tui/views/         the ATUI views: menu, output, form, todo list, about
 ```
 
 ## Documentation

@@ -18,6 +18,7 @@ defmodule ITui.Views.MainMenu do
     * `enter` or `→` — open a submenu, or run a command
     * an entry's own key — the same, without moving first
     * `esc`, `←` or `backspace` — back out of a submenu
+    * `?` — what this is, and what it is built on
     * `q` — quit
   """
 
@@ -26,7 +27,7 @@ defmodule ITui.Views.MainMenu do
   alias Atui.{Layout, Style, Text}
   alias ITui.{Command, Menu, Schema, Views}
   alias ITui.Menu.Item
-  alias ITui.Views.{Form, Output}
+  alias ITui.Views.{About, Form, Output}
 
   @impl Atui.View
   def mount(opts) do
@@ -59,6 +60,10 @@ defmodule ITui.Views.MainMenu do
   def handle_key(_key, %{popup?: true} = state), do: {:pass, state}
 
   def handle_key({:char, "q"}, state), do: {:halt, state}
+
+  def handle_key({:char, "?"}, state) do
+    {:push, About, [notify: __MODULE__], %{state | popup?: true}}
+  end
 
   # A command is running: the only thing left to do is wait, or leave.
   def handle_key(_key, %{busy: busy} = state) when not is_nil(busy), do: {:ok, state}
@@ -180,11 +185,25 @@ defmodule ITui.Views.MainMenu do
   end
 
   defp keys(%{trail: []}, width) do
-    Text.first_fitting(["↑↓ move · enter run · q quit", "↑↓ · enter · q"], width)
+    Text.first_fitting(
+      [
+        "↑↓ move · enter run · ? about · q quit",
+        "↑↓ move · enter run · q quit",
+        "↑↓ · enter · q"
+      ],
+      width
+    )
   end
 
   defp keys(_state, width) do
-    Text.first_fitting(["↑↓ move · enter run · esc back · q quit", "↑↓ · enter · esc · q"], width)
+    Text.first_fitting(
+      [
+        "↑↓ move · enter run · esc back · ? about · q quit",
+        "↑↓ move · enter run · esc back · q quit",
+        "↑↓ · enter · esc · q"
+      ],
+      width
+    )
   end
 
   defp activate(state, nil), do: {:ok, state}
