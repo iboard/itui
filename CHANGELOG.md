@@ -32,13 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A `datetime` field type (`ITui.Schema.Timestamp`), stored as ISO 8601 in UTC
   and shown in local time.
-- Fields say where they belong: `"list": false` keeps one out of the columns
-  and beside the list instead, `"form": false` means it is never asked for.
-- The todo list is a sortable table — `←`/`→` move the sort from column to
-  column, `s` turns it the other way up — with `description` and `url` fields,
-  a `Created` column and a `Checked off` column that is written when a todo is
-  ticked and cleared when it is unticked.
-- A schema names the column its list starts sorted by (`"sort"`).
+- A schema says which of its fields are columns and in what order
+  (`"columns"`), and which column its list starts sorted by (`"sort"`); a field
+  left out of the columns is shown beside the list, and `"form": false` on a
+  field means it is never asked for.
+- The todo list is a sortable, ruled table — `←`/`→` move the sort from column
+  to column, `r` turns it the other way up, `R` re-reads the file — with a
+  serial number, `description` and `url` fields, a `Created` column and a
+  `Checked off` column that is written when a todo is ticked and cleared when
+  it is unticked.
 
 ### Changed
 

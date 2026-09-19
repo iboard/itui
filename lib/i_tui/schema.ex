@@ -19,8 +19,11 @@ defmodule ITui.Schema do
       }
 
   `label` names one record and titles the form that edits it; `title` names the
-  collection and heads the list of them, defaulting to `label`. `sort` names
-  the column the list starts sorted by. `source` is
+  collection and heads the list of them, defaulting to `label`. `columns` says
+  which fields the list gives a column to and in what order — a table reads in
+  a different order from the form that fills it, and a field left out is shown
+  beside the list instead. `sort` names the column the list starts sorted by.
+  `source` is
   where `ITui.Repo` keeps the records, and only matters for a schema that is
   stored; a form collecting the arguments of a command has no source at all.
 
@@ -49,7 +52,7 @@ defmodule ITui.Schema do
   alias Ecto.Changeset
   alias ITui.Schema.Field
 
-  defstruct [:name, :label, :title, :source, :sort, fields: []]
+  defstruct [:name, :label, :title, :source, :sort, :columns, fields: []]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -57,6 +60,7 @@ defmodule ITui.Schema do
           title: String.t(),
           source: Path.t() | nil,
           sort: atom() | nil,
+          columns: [atom()] | nil,
           fields: [Field.t()]
         }
 
@@ -106,6 +110,7 @@ defmodule ITui.Schema do
   def from_map(%{"fields" => fields} = map) when is_list(fields) do
     with {:ok, name} <- name(map),
          {:ok, fields} <- parse_fields(fields, name),
+         {:ok, columns} <- columns(map, fields, name),
          {:ok, sort} <- sort(map, fields, name) do
       label = label(map, name)
 
@@ -116,6 +121,7 @@ defmodule ITui.Schema do
          title: title(map, label),
          source: source(map, name),
          sort: sort,
+         columns: columns,
          fields: fields
        }}
     end
@@ -227,16 +233,28 @@ defmodule ITui.Schema do
   def form_fields(%__MODULE__{fields: fields}), do: Enum.filter(fields, & &1.form)
 
   @doc """
-  The fields a list gives a column to.
+  The fields a list gives a column to, in the order it draws them.
+
+  That is `columns` when the schema names them — a table reads in a different
+  order from the form that fills it — and every field otherwise.
   """
   @spec list_fields(t()) :: [Field.t()]
-  def list_fields(%__MODULE__{fields: fields}), do: Enum.filter(fields, & &1.list)
+  def list_fields(%__MODULE__{columns: nil, fields: fields}), do: fields
+
+  def list_fields(%__MODULE__{columns: columns} = schema) do
+    Enum.map(columns, &field(schema, &1))
+  end
 
   @doc """
-  The fields a list shows beside itself rather than in a column.
+  The fields a list shows beside itself rather than in a column: the ones
+  `columns` leaves out, which is where a description or a link belongs.
   """
   @spec detail_fields(t()) :: [Field.t()]
-  def detail_fields(%__MODULE__{fields: fields}), do: Enum.reject(fields, & &1.list)
+  def detail_fields(%__MODULE__{columns: nil}), do: []
+
+  def detail_fields(%__MODULE__{columns: columns, fields: fields}) do
+    Enum.reject(fields, &(&1.key in columns))
+  end
 
   @doc """
   The field called `name`, or `nil`. The name may be a string or an atom.
@@ -322,6 +340,34 @@ defmodule ITui.Schema do
 
   defp source(%{"source" => source}, _name) when is_binary(source), do: source
   defp source(_map, _name), do: nil
+
+  # Which fields are columns, and in what order. A field left out is shown
+  # beside the list instead.
+  defp columns(%{"columns" => columns}, fields, name) when is_list(columns) do
+    columns
+    |> Enum.reduce_while({:ok, []}, fn column, {:ok, acc} ->
+      case Enum.find(fields, &(&1.name == column)) do
+        nil ->
+          {:halt,
+           {:error,
+            ~s(the columns of "#{name}" name something that is not a field: ) <>
+              inspect(column)}}
+
+        field ->
+          {:cont, {:ok, [field.key | acc]}}
+      end
+    end)
+    |> case do
+      {:ok, columns} -> {:ok, Enum.reverse(columns)}
+      error -> error
+    end
+  end
+
+  defp columns(%{"columns" => columns}, _fields, name) when not is_nil(columns) do
+    {:error, ~s(the columns of "#{name}" must be a list of field names, got: #{inspect(columns)})}
+  end
+
+  defp columns(_map, _fields, _name), do: {:ok, nil}
 
   # The column a list starts sorted by, named rather than guessed.
   defp sort(%{"sort" => sort}, fields, name) when is_binary(sort) do

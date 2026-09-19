@@ -7,10 +7,12 @@ defmodule ITui.Views.Todo do
   here mentions a title or a priority, so a field added to the schema file
   shows up in the list and in the form without a line of code changing.
 
-  A field marked `"list": false` is shown beside the list rather than in it,
-  which is where a description and a link belong; a field marked
-  `"form": false` is never asked for, which is what a timestamp the
-  application writes itself needs.
+  The schema's `columns` say which fields the table draws and in what order —
+  a table reads in a different order from the form that fills it — and a field
+  left out of them is shown beside the list instead, which is where a
+  description and a link belong. A field marked `"form": false` is never asked
+  for, which is what a serial number and a timestamp the application writes
+  itself need.
 
   Records go through `ITui.Repo`, which keeps them in the JSON file the schema
   names as its source.
@@ -19,11 +21,11 @@ defmodule ITui.Views.Todo do
 
     * `↑`/`↓` or `k`/`j` — move
     * `←`/`→` — sort by the column to the left, or to the right
-    * `s` — the same column, the other way up
+    * `r` — the same column, the other way up
     * `a` — add, `e` or `enter` — edit
     * `space` — done, or not
     * `d` then `y` — delete
-    * `r` — re-read the file
+    * `R` — re-read the file
     * `esc` — back to the menu
   """
 
@@ -36,9 +38,10 @@ defmodule ITui.Views.Todo do
 
   # Two columns of room for the cursor, and one of air after it.
   @indent 3
-  @gap 2
+  # A space, a rule, a space.
+  @gap 3
   @max_column 24
-  @min_flexible 10
+  @min_flexible 16
 
   @impl Atui.View
   def mount(opts) do
@@ -82,8 +85,8 @@ defmodule ITui.Views.Todo do
   def handle_key(key, state) when key in [:down, {:char, "j"}], do: {:ok, move(state, 1)}
   def handle_key(:left, state), do: {:ok, sort_by(state, -1)}
   def handle_key(:right, state), do: {:ok, sort_by(state, 1)}
-  def handle_key({:char, "s"}, state), do: {:ok, reverse(state)}
-  def handle_key({:char, "r"}, state), do: {:ok, reload(state)}
+  def handle_key({:char, "r"}, state), do: {:ok, reverse(state)}
+  def handle_key({:char, "R"}, state), do: {:ok, reload(state)}
   def handle_key({:char, "a"}, state), do: add(state)
 
   def handle_key(key, state) when key in [:enter, {:char, "e"}] do
@@ -104,7 +107,7 @@ defmodule ITui.Views.Todo do
 
   @impl Atui.View
   def render(state, rect) do
-    {head, rest} = rect |> Rect.inset(1) |> Layout.split_top(2)
+    {head, rest} = rect |> Rect.inset(1) |> Layout.split_top(3)
     {list, foot} = Layout.split_bottom(rest, 2)
     # A column of air at each end: the cursor's, and one before the border.
     columns = columns(state, list.width - @indent - 1)
@@ -114,6 +117,7 @@ defmodule ITui.Views.Todo do
     |> Screen.put_text(head.x + 1, head.y, summary(state), Style.new(bold: true))
     |> sorted_by(state, head)
     |> header(state, columns, %{head | y: head.y + 1})
+    |> rule(state, columns, %{head | y: head.y + 2})
     |> body(state, columns, list)
     |> Screen.put_text(foot.x + 1, foot.y, detail(state, foot.width - 2), dim())
     |> Screen.put_text(foot.x + 1, foot.y + 1, keys(state, foot.width - 2), dim())
@@ -192,9 +196,20 @@ defmodule ITui.Views.Todo do
     widths = stretch(widths, flexible(fields), room - Enum.sum(widths))
 
     if Enum.sum(widths) > room and length(fields) > 1 do
-      fit(Enum.drop(fields, -1), todos, width)
+      fit(drop_one(fields, flexible(fields)), todos, width)
     else
       place(fields, widths, width)
+    end
+  end
+
+  # The column that stretches is the one with something to say, so it is the
+  # last to go: what gets dropped is the rightmost of the others.
+  defp drop_one(fields, nil), do: Enum.drop(fields, -1)
+
+  defp drop_one(fields, flexible) do
+    case fields |> Enum.with_index() |> Enum.reverse() |> Enum.find(&(elem(&1, 1) != flexible)) do
+      nil -> Enum.drop(fields, -1)
+      {_field, index} -> List.delete_at(fields, index)
     end
   end
 
@@ -235,8 +250,31 @@ defmodule ITui.Views.Todo do
   defp header(screen, %{schema: nil}, _columns, _rect), do: screen
 
   defp header(screen, state, columns, rect) do
-    Enum.reduce(columns, screen, fn {field, x, width}, acc ->
+    columns
+    |> Enum.reduce(screen, fn {field, x, width}, acc ->
       Screen.put_text(acc, rect.x + @indent + x, rect.y, heading(state, field, width), dim())
+    end)
+    |> dividers(columns, rect, "│", dim())
+  end
+
+  # A rule under the headings, meeting the box on both sides and the column
+  # dividers where they cross it.
+  defp rule(screen, %{schema: nil}, _columns, _rect), do: screen
+  defp rule(screen, %{error: error}, _columns, _rect) when is_binary(error), do: screen
+
+  defp rule(screen, _state, columns, rect) do
+    screen
+    |> Screen.put_text(rect.x - 1, rect.y, "├", border())
+    |> Screen.put_text(rect.x, rect.y, String.duplicate("─", rect.width), border())
+    |> Screen.put_text(rect.x + rect.width, rect.y, "┤", border())
+    |> dividers(columns, rect, "┼", border())
+  end
+
+  defp dividers(screen, columns, rect, grapheme, style) do
+    columns
+    |> Enum.drop(-1)
+    |> Enum.reduce(screen, fn {_field, x, width}, acc ->
+      Screen.put(acc, rect.x + @indent + x + width + 1, rect.y, grapheme, style)
     end)
   end
 
@@ -278,6 +316,7 @@ defmodule ITui.Views.Todo do
     screen
     |> Screen.fill(rect, " ", style)
     |> Screen.put_text(rect.x + 1, rect.y, if(selected?, do: "▸", else: " "), style)
+    |> dividers(columns, rect, "│", style || dim())
     |> cells(columns, todo, rect, style)
   end
 
@@ -334,7 +373,7 @@ defmodule ITui.Views.Todo do
   defp keys(_state, width) do
     Text.first_fitting(
       [
-        "a add · enter edit · space done · d delete · ←→ sort · s reverse · esc back",
+        "a add · enter edit · space done · d delete · ←→ sort · r reverse · esc back",
         "a add · enter edit · space done · d delete · ←→ sort · esc back",
         "a · enter · space · d · ←→ · esc"
       ],
@@ -514,6 +553,8 @@ defmodule ITui.Views.Todo do
   end
 
   defp clamp(cursor, todos), do: cursor |> min(max(length(todos) - 1, 0)) |> max(0)
+
+  defp border, do: Style.new(fg: :bright_black)
 
   defp dim, do: Style.new(dim: true)
 end

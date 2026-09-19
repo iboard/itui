@@ -173,6 +173,7 @@ defmodule ITui.SchemaTest do
                url: :string,
                priority: :integer,
                done: Boolean,
+               id: :integer,
                inserted_at: Timestamp,
                done_at: Timestamp
              }
@@ -183,6 +184,7 @@ defmodule ITui.SchemaTest do
                url: nil,
                priority: 2,
                done: false,
+               id: nil,
                inserted_at: nil,
                done_at: nil
              }
@@ -190,11 +192,11 @@ defmodule ITui.SchemaTest do
   end
 
   describe "where a field belongs" do
-    test "a field says whether it is asked for and whether it is a column" do
+    test "a field says whether it is asked for, and the schema which are columns" do
       json = """
-      {"name": "t", "fields": [
+      {"name": "t", "columns": ["c", "a"], "fields": [
         {"name": "a"},
-        {"name": "b", "list": false},
+        {"name": "b"},
         {"name": "c", "type": "datetime", "form": false}
       ]}
       """
@@ -202,8 +204,25 @@ defmodule ITui.SchemaTest do
       {:ok, schema} = Schema.parse(json)
 
       assert Enum.map(Schema.form_fields(schema), & &1.name) == ["a", "b"]
-      assert Enum.map(Schema.list_fields(schema), & &1.name) == ["a", "c"]
+      assert Enum.map(Schema.list_fields(schema), & &1.name) == ["c", "a"]
       assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["b"]
+    end
+
+    test "every field is a column when the schema does not say otherwise" do
+      {:ok, schema} = Schema.parse(~s({"name": "t", "fields": [{"name": "a"}, {"name": "b"}]}))
+
+      assert Enum.map(Schema.list_fields(schema), & &1.name) == ["a", "b"]
+      assert Schema.detail_fields(schema) == []
+    end
+
+    test "rejects columns that are not fields" do
+      json = ~s({"name": "t", "columns": ["a", "z"], "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ ~s(the columns of "t" name something that is not a field: "z")
+
+      json = ~s({"name": "t", "columns": "a", "fields": [{"name": "a"}]})
+      assert {:error, message} = Schema.parse(json)
+      assert message =~ "must be a list of field names"
     end
 
     test "a schema names the column its list starts sorted by" do
@@ -267,12 +286,13 @@ defmodule ITui.SchemaTest do
       assert schema.source == "data/records/todos.json"
 
       assert Enum.map(schema.fields, & &1.name) ==
-               ["title", "description", "url", "priority", "done", "inserted_at", "done_at"]
+               ["title", "description", "url", "priority", "done", "id", "inserted_at", "done_at"]
 
-      assert schema.sort == :inserted_at
+      assert schema.sort == :id
 
+      # The table reads in a different order from the form that fills it.
       assert Enum.map(Schema.list_fields(schema), & &1.name) ==
-               ["title", "priority", "done", "inserted_at", "done_at"]
+               ["id", "priority", "done", "inserted_at", "done_at", "title"]
 
       assert Enum.map(Schema.detail_fields(schema), & &1.name) == ["description", "url"]
 

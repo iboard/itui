@@ -20,14 +20,13 @@ defmodule ITui.Schema.Field do
         "required": true,         // optional
         "default": "",            // optional: the value before anything is typed
         "placeholder": "what to do",
-        "form": false,            // optional: keep it out of the form
-        "list": false             // optional: keep it out of the list's columns
+        "form": false             // optional: never asked for
       }
 
-  `form` and `list` are what a field says about where it belongs. A timestamp
-  the application writes itself is `"form": false` — there is nothing to ask —
-  and a long piece of prose is `"list": false`, because a column is no place
-  for it.
+  `form` is what a field says about where it belongs: a timestamp the
+  application writes itself is `"form": false`, because there is nothing to
+  ask. Which fields are columns, and in what order, is the schema's business
+  rather than the field's — see `ITui.Schema`.
   """
 
   alias ITui.Schema.{Boolean, Timestamp}
@@ -40,8 +39,7 @@ defmodule ITui.Schema.Field do
     :placeholder,
     type: :string,
     required: false,
-    form: true,
-    list: true
+    form: true
   ]
 
   @type t :: %__MODULE__{
@@ -52,8 +50,7 @@ defmodule ITui.Schema.Field do
           required: boolean(),
           default: term(),
           placeholder: String.t() | nil,
-          form: boolean(),
-          list: boolean()
+          form: boolean()
         }
 
   @types %{
@@ -79,8 +76,7 @@ defmodule ITui.Schema.Field do
         type: type,
         required: map["required"] == true,
         placeholder: placeholder(map),
-        form: map["form"] != false,
-        list: map["list"] != false
+        form: map["form"] != false
       }
 
       default(field, map)

@@ -3,7 +3,8 @@
   "label": "Todo",
   "title": "Todos",
   "source": "data/records/todos.json",
-  "sort": "inserted_at",
+  "columns": ["id", "priority", "done", "inserted_at", "done_at", "title"],
+  "sort": "id",
   "fields": [
     {
       "name": "title",
@@ -16,14 +17,12 @@
       "name": "description",
       "label": "Description",
       "type": "string",
-      "list": false,
       "placeholder": "what it is about"
     },
     {
       "name": "url",
       "label": "URL",
       "type": "string",
-      "list": false,
       "placeholder": "https://…"
     },
     {
@@ -38,6 +37,12 @@
       "label": "Done",
       "type": "boolean",
       "default": false
+    },
+    {
+      "name": "id",
+      "label": "#",
+      "type": "integer",
+      "form": false
     },
     {
       "name": "inserted_at",
