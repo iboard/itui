@@ -214,8 +214,20 @@ stretches — so the sort is named in the summary line as well as marked in the
 header.
 
 `t` writes every date as it stands from today instead — `+3 days`, `-2 weeks`,
-`today` — in the coarsest unit that still means something, which is days up to
-a fortnight, then weeks, then months.
+`today` — in the coarsest unit that still means something: days up to a
+fortnight, then weeks up to a month, then months up to a year, then years.
+
+A due date can be typed the same way round, because nobody knows what date a
+fortnight on Tuesday is:
+
+```
+in 3 days · 3 days · 3d · +3d · 3weeks · 1 month · -2w · 2 years
+today · tomorrow · yesterday
+```
+
+What gets stored is the day it came to — a due date is a day, not a distance —
+so `in 2 weeks` becomes `2026-10-03` and stays there as the fortnight passes.
+Months and years land on the same day of the month, or the last one there is.
 
 ```
  Sat 2026-09-19 · 4 todos, 1 done                             sorted by # ▲

@@ -49,7 +49,7 @@
       "name": "due",
       "label": "Due",
       "type": "date",
-      "placeholder": "2026-12-24, or nothing at all"
+      "placeholder": "2026-12-24, or in 3 days"
     },
     {
       "name": "done",

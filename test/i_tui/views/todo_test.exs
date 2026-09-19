@@ -502,6 +502,23 @@ defmodule ITui.Views.TodoColourTest do
     assert Repo.all(schema) |> elem(1) |> hd() |> Map.fetch!(:due) == nil
   end
 
+  test "a due date can be typed as how far off it is", %{schema: schema} do
+    ui = with_todos(schema, [])
+
+    press(ui, {:char, "a"})
+    type(ui, "Pay the invoice")
+    press(ui, :tab)
+    type(ui, "in 2 weeks")
+    press(ui, :enter)
+    settle(ui)
+
+    due = Repo.all(schema) |> elem(1) |> hd() |> Map.fetch!(:due)
+    expected = ITui.Schema.Date.local_today() |> Date.add(14) |> Date.to_iso8601()
+
+    assert due == expected
+    assert text(ui) =~ expected
+  end
+
   test "a due date that is not a date is refused, and says how one looks", %{schema: schema} do
     ui = with_todos(schema, [])
 
@@ -511,7 +528,7 @@ defmodule ITui.Views.TodoColourTest do
     type(ui, "next tuesday")
     screen = press(ui, :enter)
 
-    assert screen =~ "Due must be a date, as 2026-09-25"
+    assert screen =~ "Due must be a date, as 2026-09-25 or in 3 days"
     assert Repo.all(schema) == {:ok, []}
   end
 end
@@ -567,7 +584,7 @@ defmodule ITui.Views.TodoShowingTest do
       assert screen =~ "-5 days"
       assert screen =~ "+1 day"
       assert screen =~ "+3 days"
-      assert screen =~ "+6 weeks"
+      assert screen =~ "+1 month"
       refute screen =~ "2026-09-15"
 
       assert press(ui, {:char, "t"}) =~ "2026-09-15"

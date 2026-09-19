@@ -140,7 +140,7 @@ defmodule ITui.Schema.Field do
   def invalid_message(:integer), do: "must be a whole number"
   def invalid_message(Boolean), do: "must be yes or no"
   def invalid_message(Timestamp), do: "must be a date and time"
-  def invalid_message(ITui.Schema.Date), do: "must be a date, as 2026-09-25"
+  def invalid_message(ITui.Schema.Date), do: "must be a date, as 2026-09-25 or in 3 days"
   def invalid_message(_type), do: nil
 
   @doc """

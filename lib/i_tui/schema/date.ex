@@ -16,6 +16,19 @@ defmodule ITui.Schema.Date do
 
   A full timestamp casts to the day it fell on, so a column can be moved from
   one type to the other without rewriting the file.
+
+  ## Saying when without looking it up
+
+  Nobody knows what date a fortnight on Tuesday is, so a day can also be given
+  as how far off it is and worked out from today:
+
+      in 3 days · 3 days · 3d · +3d · 3weeks · 1 month · -2w · 2 years
+      today · tomorrow · yesterday
+
+  Months and years land on the same day of the month, or the last one there is
+  — the 31st of January in a month is the 28th of February. What is stored is
+  the day it came to, because that is what was meant; `relative/2` says it the
+  other way round again for a list.
   """
 
   use Ecto.Type
@@ -34,7 +47,7 @@ defmodule ITui.Schema.Date do
 
     case Date.from_iso8601(value) do
       {:ok, date} -> {:ok, Date.to_iso8601(date)}
-      {:error, _reason} -> from_timestamp(value)
+      {:error, _reason} -> with :error <- from_timestamp(value), do: from_words(value)
     end
   end
 
@@ -83,7 +96,8 @@ defmodule ITui.Schema.Date do
 
   The further off a day is, the coarser the unit it is worth saying in — a
   fortnight is easier to weigh up than fourteen days, and five months easier
-  than a hundred and fifty.
+  than a hundred and fifty. Days up to a fortnight, then weeks up to a month,
+  then months up to a year, then years.
 
       iex> ITui.Schema.Date.relative(~D[2026-09-21], ~D[2026-09-19])
       "+2 days"
@@ -102,8 +116,9 @@ defmodule ITui.Schema.Date do
     case Date.diff(date, today) do
       0 -> "today"
       days when abs(days) <= 13 -> count(days, 1, "day")
-      days when abs(days) <= 56 -> count(days, 7, "week")
-      days -> count(days, 30, "month")
+      days when abs(days) <= 27 -> count(days, 7, "week")
+      days when abs(days) <= 364 -> count(days, 30, "month")
+      days -> count(days, 365, "year")
     end
   end
 
@@ -116,6 +131,50 @@ defmodule ITui.Schema.Date do
   @doc "The width `format/1` needs, for laying out a column."
   @spec width() :: pos_integer()
   def width, do: 10
+
+  @units %{
+    "d" => :day,
+    "day" => :day,
+    "days" => :day,
+    "w" => :week,
+    "week" => :week,
+    "weeks" => :week,
+    "m" => :month,
+    "mo" => :month,
+    "month" => :month,
+    "months" => :month,
+    "y" => :year,
+    "year" => :year,
+    "years" => :year
+  }
+
+  @words %{"today" => 0, "tomorrow" => 1, "yesterday" => -1}
+
+  @amount ~r/^([+-]?\d+)\s*([a-z]+)$/
+
+  # "in 3 days" is how it is said; "in" carries nothing, so it is dropped.
+  defp from_words(value) do
+    said = value |> String.downcase() |> String.replace_prefix("in ", "") |> String.trim()
+
+    case Map.fetch(@words, said) do
+      {:ok, days} -> {:ok, shift(days, :day)}
+      :error -> from_amount(said)
+    end
+  end
+
+  defp from_amount(said) do
+    with [_all, number, unit] <- Regex.run(@amount, said),
+         {:ok, unit} <- Map.fetch(@units, unit) do
+      {:ok, shift(String.to_integer(number), unit)}
+    else
+      _otherwise -> :error
+    end
+  end
+
+  defp shift(n, :day), do: local_today() |> Date.add(n) |> Date.to_iso8601()
+  defp shift(n, :week), do: local_today() |> Date.add(n * 7) |> Date.to_iso8601()
+  defp shift(n, :month), do: local_today() |> Date.shift(month: n) |> Date.to_iso8601()
+  defp shift(n, :year), do: local_today() |> Date.shift(year: n) |> Date.to_iso8601()
 
   # Rounded to the nearest whole unit, and never to nothing: a day and a half
   # away is "+1 day", not "today".

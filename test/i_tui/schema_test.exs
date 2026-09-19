@@ -322,13 +322,50 @@ defmodule ITui.SchemaTest do
     test "refuses what is not one, and says how one is written" do
       assert ITui.Schema.Date.cast("25.09.2026") == :error
       assert ITui.Schema.Date.cast("2026-13-01") == :error
-      assert ITui.Schema.Date.cast("tomorrow") == :error
+      assert ITui.Schema.Date.cast("3 fortnights") == :error
+      assert ITui.Schema.Date.cast("3") == :error
+      assert ITui.Schema.Date.cast("soon") == :error
 
       json = ~s({"name": "t", "fields": [{"name": "due", "type": "date"}]})
       {:ok, schema} = Schema.parse(json)
 
-      assert messages(Schema.cast(schema, %{"due" => "tomorrow"}), schema) ==
-               [{"Due", "must be a date, as 2026-09-25"}]
+      assert messages(Schema.cast(schema, %{"due" => "whenever"}), schema) ==
+               [{"Due", "must be a date, as 2026-09-25 or in 3 days"}]
+    end
+
+    test "takes a day said as how far off it is, and works it out from today" do
+      today = ITui.Schema.Date.local_today()
+      on = fn days -> {:ok, today |> Date.add(days) |> Date.to_iso8601()} end
+
+      assert ITui.Schema.Date.cast("in 3 days") == on.(3)
+      assert ITui.Schema.Date.cast("3 days") == on.(3)
+      assert ITui.Schema.Date.cast("3days") == on.(3)
+      assert ITui.Schema.Date.cast("3d") == on.(3)
+      assert ITui.Schema.Date.cast("+3d") == on.(3)
+      assert ITui.Schema.Date.cast("  3 d  ") == on.(3)
+      assert ITui.Schema.Date.cast("IN 3 DAYS") == on.(3)
+
+      assert ITui.Schema.Date.cast("3weeks") == on.(21)
+      assert ITui.Schema.Date.cast("-2w") == on.(-14)
+
+      assert ITui.Schema.Date.cast("today") == on.(0)
+      assert ITui.Schema.Date.cast("tomorrow") == on.(1)
+      assert ITui.Schema.Date.cast("yesterday") == on.(-1)
+
+      # Months and years land on the same day of the month, not on a count of days.
+      assert ITui.Schema.Date.cast("1 month") ==
+               {:ok, today |> Date.shift(month: 1) |> Date.to_iso8601()}
+
+      assert ITui.Schema.Date.cast("2 years") ==
+               {:ok, today |> Date.shift(year: 2) |> Date.to_iso8601()}
+    end
+
+    test "and says it the other way round again" do
+      assert "in 2 weeks"
+             |> ITui.Schema.Date.cast()
+             |> elem(1)
+             |> ITui.Schema.Date.parse()
+             |> ITui.Schema.Date.relative(ITui.Schema.Date.local_today()) == "+2 weeks"
     end
 
     test "is the same thing on the way in and on the way out" do
@@ -355,9 +392,12 @@ defmodule ITui.SchemaTest do
       assert on.(13) == "+13 days"
       assert on.(14) == "+2 weeks"
       assert on.(-14) == "-2 weeks"
-      assert on.(56) == "+8 weeks"
-      assert on.(57) == "+2 months"
-      assert on.(365) == "+12 months"
+      assert on.(27) == "+4 weeks"
+      assert on.(28) == "+1 month"
+      assert on.(90) == "+3 months"
+      assert on.(364) == "+12 months"
+      assert on.(365) == "+1 year"
+      assert on.(-730) == "-2 years"
       assert ITui.Schema.Date.relative(nil, today) == ""
     end
 

@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `date` field type (`ITui.Schema.Date`) — a day in a calendar rather than a
   moment in time — and a `due` field on a todo, asked for in the form and
   given a column between Created and Checked.
+- A date field takes a day said as how far off it is — `in 3 days`, `3d`,
+  `3weeks`, `1 month`, `tomorrow` — and stores the day it comes to.
 - `t` switches the todo list between dates as they are written and as they
   stand from today (`+3 days`, `-2 weeks`), and `f` opens `ITui.Views.Filter`,
   which hides and shows the colour bands and says how many there are of each.
