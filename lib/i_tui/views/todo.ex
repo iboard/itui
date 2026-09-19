@@ -22,7 +22,9 @@ defmodule ITui.Views.Todo do
   A todo that is done is green, and the rest are coloured by how near their
   `due` date is: red once it has gone by, yellow within two days, orange
   within what is left of this calendar week, and white when it is further off
-  than that or not due on any particular day. The row the cursor is on keeps
+  than that or not due on any particular day. Today's date is at the top of
+  the screen, because it is what all of that is reckoned from — the same value
+  the colours are worked out with, not a second reading of the clock. The row the cursor is on keeps
   its colour and takes a background instead, so the one thing the colour says
   is not the one thing the cursor hides.
 
@@ -165,10 +167,13 @@ defmodule ITui.Views.Todo do
 
   defp summary(%{error: error}) when is_binary(error), do: "nothing to show"
 
+  # The day the colours are reckoned from, said out loud: a row is orange
+  # because of what is left of the week this date falls in.
   defp summary(state) do
     done = Enum.count(state.todos, &done?/1)
+    count = length(state.todos)
 
-    "#{length(state.todos)} #{plural(length(state.todos))}, #{done} done"
+    "#{Calendar.strftime(today(state), "%a %Y-%m-%d")} · #{count} #{plural(count)}, #{done} done"
   end
 
   defp plural(1), do: "todo"

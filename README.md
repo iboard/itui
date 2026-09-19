@@ -213,11 +213,11 @@ stretches — so the sort is named in the summary line as well as marked in the
 header.
 
 ```
- 4 todos, 1 done                                              sorted by # ▲
-   # ▲ │ Done   │ P   │ Created    │ Checked    │ Title               │ Description
- ──────┼────────┼─────┼────────────┼────────────┼─────────────────────┼─────────────
- ▸   2 │ [x]    │   1 │ 2026-09-19 │ 2026-09-19 │ scheissn geh        │ how can I wr
-     3 │ [ ]    │   5 │ 2026-09-19 │            │ publish iTUI to HEX │
+ Sat 2026-09-19 · 4 todos, 1 done                             sorted by # ▲
+   # ▲ │ Done   │ P   │ Created    │ Due        │ Checked    │ Title
+ ──────┼────────┼─────┼────────────┼────────────┼────────────┼─────────────────────
+ ▸   2 │ [x]    │   1 │ 2026-09-19 │ 2026-09-16 │ 2026-09-19 │ scheissn geh
+     3 │ [ ]    │   5 │ 2026-09-19 │            │            │ publish iTUI to HEX
  Description: how can I write multiple line inputs and how to edit them
  URL: https://iboard.cc
 ```
@@ -235,8 +235,10 @@ takes the date away again.
 | orange | due within what is left of this calendar week |
 | white | due later than that, or not due on any particular day |
 
-Done wins over everything, so a todo that was overdue turns green when it is
-ticked rather than staying red. The row the cursor is on keeps its colour and
+Today's date is at the top of the screen, because it is what all of that is
+reckoned from — the same value the colours are worked out with, not a second
+reading of the clock. Done wins over everything, so a todo that was overdue
+turns green when it is ticked rather than staying red. The row the cursor is on keeps its colour and
 takes a background instead, so the one thing the colour says is not the one
 thing the cursor hides.
 

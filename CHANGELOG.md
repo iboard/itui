@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `date` field type (`ITui.Schema.Date`) — a day in a calendar rather than a
   moment in time — and a `due` field on a todo, asked for in the form and
   given a column between Created and Checked.
+- Today's date heads the todo list, and is the day its colours are reckoned
+  from.
 - Rows are coloured by how near their due date is: green once done, red past
   it, yellow within two days, orange within the rest of the calendar week,
   white otherwise.

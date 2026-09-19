@@ -428,6 +428,14 @@ defmodule ITui.Views.TodoColourTest do
     style
   end
 
+  test "today is at the top, and is the day the colours are reckoned from", %{schema: schema} do
+    ui = with_todos(schema, [%{"title" => "Due on the Thursday", "due" => "2026-09-17"}])
+
+    # A Monday, so the Thursday is still inside this week.
+    assert text(ui) =~ "Mon 2026-09-14 · 1 todo, 0 done"
+    assert tones(ui) == [{"Due on the Thursday", :week}]
+  end
+
   test "is how near the due date is, and green once it is done", %{schema: schema} do
     ui =
       with_todos(schema, [
