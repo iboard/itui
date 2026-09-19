@@ -38,6 +38,7 @@ defmodule ITui.MixProject do
   defp deps do
     [
       {:atui, "~> 0.3.0"},
+      {:ecto, "~> 3.13"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]

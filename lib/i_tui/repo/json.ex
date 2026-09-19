@@ -10,6 +10,10 @@ defmodule ITui.Repo.Json do
 
   A file that does not exist yet reads as an empty collection, so a schema
   works before anything has ever been stored.
+
+  On the way in, the keys the schema declares become atoms and the rest are
+  left as they are, so a key somebody added by hand survives being written
+  back out.
   """
 
   @behaviour ITui.Repo
@@ -34,12 +38,7 @@ defmodule ITui.Repo.Json do
     with {:ok, values} <- Schema.cast(schema, params),
          {:ok, records} <- read(schema) do
       now = timestamp()
-
-      record =
-        values
-        |> Map.put("id", next_id(records))
-        |> Map.put("inserted_at", now)
-        |> Map.put("updated_at", now)
+      record = Map.merge(values, %{id: next_id(records), inserted_at: now, updated_at: now})
 
       with :ok <- write(schema, records ++ [record]), do: {:ok, record}
     end
@@ -47,12 +46,12 @@ defmodule ITui.Repo.Json do
 
   @impl ITui.Repo
   def update(%Schema{} = schema, id, params) do
-    # Only the keys that were given are cast, so setting one of them does not
-    # reset the rest of the record to the defaults of the fields not mentioned.
-    with {:ok, values} <- Schema.cast(schema, params, Map.keys(params)),
-         {:ok, records} <- read(schema),
-         {:ok, record} <- fetch(records, id, schema) do
-      updated = record |> Map.merge(values) |> Map.put("updated_at", timestamp())
+    with {:ok, records} <- read(schema),
+         {:ok, record} <- fetch(records, id, schema),
+         # Only the keys that were given are cast, so setting one of them does
+         # not disturb the fields nobody mentioned.
+         {:ok, updated} <- Schema.change(schema, record, params, Map.keys(params)) do
+      updated = Map.put(updated, :updated_at, timestamp())
 
       with :ok <- write(schema, replace(records, updated)), do: {:ok, updated}
     end
@@ -70,30 +69,45 @@ defmodule ITui.Repo.Json do
     {:error, ~s(the "#{schema.name}" schema has no source to read records from)}
   end
 
-  defp read(%Schema{source: source}) do
+  defp read(%Schema{source: source} = schema) do
     case File.read(source) do
-      {:ok, contents} -> decode(contents, source)
+      {:ok, contents} -> decode(contents, schema)
       {:error, :enoent} -> {:ok, []}
       {:error, posix} -> {:error, "#{source}: #{:file.format_error(posix)}"}
     end
   end
 
-  defp decode(contents, source) do
+  defp decode(contents, %Schema{source: source} = schema) do
     case Jason.decode(contents) do
-      {:ok, records} when is_list(records) -> {:ok, records}
+      {:ok, records} when is_list(records) -> {:ok, Enum.map(records, &load(schema, &1))}
       {:ok, _other} -> {:error, "#{source}: expected a list of records"}
       {:error, error} -> {:error, "#{source}: invalid JSON: #{Exception.message(error)}"}
     end
   end
 
   defp write(%Schema{source: source}, records) do
+    contents = Jason.encode!(Enum.map(records, &dump/1), pretty: true) <> "\n"
+
     with :ok <- File.mkdir_p(Path.dirname(source)),
-         :ok <- File.write(source, Jason.encode!(records, pretty: true) <> "\n") do
+         :ok <- File.write(source, contents) do
       :ok
     else
       {:error, posix} -> {:error, "#{source}: #{:file.format_error(posix)}"}
     end
   end
+
+  # The keys the schema knows about become atoms; anything else is left alone,
+  # so a key somebody added by hand is still there when the file is rewritten.
+  defp load(%Schema{} = schema, record) do
+    keys =
+      schema.fields
+      |> Map.new(&{&1.name, &1.key})
+      |> Map.merge(%{"id" => :id, "inserted_at" => :inserted_at, "updated_at" => :updated_at})
+
+    Map.new(record, fn {key, value} -> {Map.get(keys, key, key), value} end)
+  end
+
+  defp dump(record), do: Map.new(record, fn {key, value} -> {to_string(key), value} end)
 
   defp fetch(records, id, schema) do
     case find(records, id) do
@@ -102,17 +116,17 @@ defmodule ITui.Repo.Json do
     end
   end
 
-  defp find(records, id), do: Enum.find(records, &(&1["id"] == id))
+  defp find(records, id), do: Enum.find(records, &(&1[:id] == id))
 
   defp replace(records, record) do
     Enum.map(records, fn existing ->
-      if existing["id"] == record["id"], do: record, else: existing
+      if existing[:id] == record[:id], do: record, else: existing
     end)
   end
 
   defp next_id(records) do
     records
-    |> Enum.map(&(&1["id"] || 0))
+    |> Enum.map(&(&1[:id] || 0))
     |> Enum.max(fn -> 0 end)
     |> Kernel.+(1)
   end

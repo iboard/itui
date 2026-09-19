@@ -18,8 +18,8 @@ the parameters those commands need.
   runs, and fill its `{{placeholders}}` with the answers.
 - **Declarative schemas** — forms and data structures are defined in
   `data/schemas/*.json`, not in code.
-- **Data layer** — one repository interface, with records kept in readable JSON
-  files, on its way to Ecto.
+- **Data layer** — Ecto changesets over the JSON-declared schemas, and one
+  repository interface with the records kept in readable JSON files.
 - **A todo list** — the forms and the data layer with a screen in front of them.
 
 ## Status
@@ -29,8 +29,8 @@ Early development.
 - **Menu MVP** — done: `df`, `uptime` and `free` run from the menu.
 - **Forms & data MVP** — done: schemas in `data/schemas/`, a JSON-backed
   repository, forms over both, and a todo list built out of them.
-- **Ecto** — next: the repository rewritten as an Ecto adapter over the same
-  schemas and files.
+- **Ecto** — done: casting and validation are `Ecto.Changeset`s built from the
+  schema files.
 
 ## Installation
 
@@ -133,6 +133,31 @@ in the configuration:
 config :i_tui, repo: ITui.Repo.Json
 ```
 
+### Ecto without a database
+
+The fields are only known when the file is read, so there is no module to
+`use Ecto.Schema` in — and no need for one. `Ecto.Changeset` takes a
+`{data, types}` pair as readily as it takes a struct, so `ITui.Schema` builds
+the types out of the fields it parsed and hands Ecto the usual job:
+
+```elixir
+{:ok, schema} = ITui.Schema.load("todo")
+
+ITui.Schema.changeset(schema, %{}, %{"title" => "Write it", "priority" => "1"})
+#=> #Ecto.Changeset<changes: %{title: "Write it", priority: 1}, valid?: true>
+
+ITui.Schema.cast(schema, %{"priority" => "high"})
+#=> {:error, #Ecto.Changeset<...>}
+```
+
+`ITui.Schema.errors/2` turns a changeset into what the form shows under the
+rows. A yes/no field is a custom `Ecto.Type` (`ITui.Schema.Boolean`) so that
+`yes`, `no`, `y` and `n` mean what a person typing them means.
+
+There is no repository behind the changesets: casting ends in
+`Ecto.Changeset.apply_action/2`, and the JSON file is the database. `ecto_sql`
+is not a dependency, and nothing here talks to one.
+
 ### The todo list
 
 `data/schemas/todo.json` and the `Todos` menu entry are the whole application:
@@ -162,7 +187,7 @@ data/schemas/*.json      forms and data structures, as data
 data/records/*.json      the records themselves
 lib/i_tui/menu.ex        the menu file, parsed
 lib/i_tui/command.ex     a system command, and the running of it
-lib/i_tui/schema.ex      a schema file, parsed, and the casting of values
+lib/i_tui/schema.ex      a schema file, parsed, and its Ecto changesets
 lib/i_tui/repo.ex        where records live, behind one interface
 lib/i_tui/views/         the ATUI views: menu, output, form, todo list
 ```

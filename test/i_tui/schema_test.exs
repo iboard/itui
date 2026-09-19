@@ -4,7 +4,11 @@ defmodule ITui.SchemaTest do
   doctest ITui.Schema.Field
 
   alias ITui.Schema
-  alias ITui.Schema.Field
+  alias ITui.Schema.{Boolean, Field}
+
+  defp messages({:error, changeset}, schema) do
+    schema |> Schema.errors(changeset) |> Enum.map(fn {f, m} -> {f.label, m} end)
+  end
 
   describe "parse/1" do
     test "reads the fields, their types and their defaults" do
@@ -31,7 +35,7 @@ defmodule ITui.SchemaTest do
       assert [title, priority, done] = schema.fields
       assert %Field{type: :string, required: true, placeholder: "what to do"} = title
       assert %Field{type: :integer, default: 2, required: false} = priority
-      assert %Field{type: :boolean, default: false} = done
+      assert %Field{type: Boolean, default: false, key: :done} = done
     end
 
     test "a label is made from the name when there is none" do
@@ -68,7 +72,7 @@ defmodule ITui.SchemaTest do
     end
   end
 
-  describe "cast/2" do
+  describe "cast/3" do
     setup do
       json = """
       {"name": "t", "fields": [
@@ -84,38 +88,104 @@ defmodule ITui.SchemaTest do
       %{schema: schema}
     end
 
-    test "casts every field, and fills in the defaults", %{schema: schema} do
+    test "casts every field into a record, and fills in the defaults", %{schema: schema} do
       assert {:ok, values} = Schema.cast(schema, %{"title" => "  Write it  "})
 
       # A field nobody mentioned and nothing defaults is empty, not "".
-      assert values == %{"title" => "Write it", "count" => 2, "done" => false, "note" => nil}
-      assert {:ok, %{"note" => ""}} = Schema.cast(schema, %{"title" => "x", "note" => "  "})
+      assert values == %{title: "Write it", count: 2, done: false, note: nil}
+      assert {:ok, %{note: ""}} = Schema.cast(schema, %{"title" => "x", "note" => "  "})
     end
 
     test "reads yes and no as well as true and false", %{schema: schema} do
-      assert {:ok, %{"done" => true}} = Schema.cast(schema, %{"title" => "x", "done" => "yes"})
-      assert {:ok, %{"done" => false}} = Schema.cast(schema, %{"title" => "x", "done" => "no"})
-      assert {:ok, %{"done" => true}} = Schema.cast(schema, %{"title" => "x", "done" => true})
+      assert {:ok, %{done: true}} = Schema.cast(schema, %{"title" => "x", "done" => "yes"})
+      assert {:ok, %{done: false}} = Schema.cast(schema, %{"title" => "x", "done" => "no"})
+      assert {:ok, %{done: true}} = Schema.cast(schema, %{"title" => "x", "done" => true})
     end
 
     test "reports every mistake at once, in the order of the fields", %{schema: schema} do
-      assert {:error, errors} = Schema.cast(schema, %{"count" => "two", "done" => "maybe"})
+      result = Schema.cast(schema, %{"count" => "two", "done" => "maybe"})
 
-      assert errors == [
-               {"title", "is required"},
-               {"count", "must be a whole number"},
-               {"done", "must be yes or no"}
+      assert {:error, %Ecto.Changeset{valid?: false}} = result
+
+      assert messages(result, schema) == [
+               {"Title", "is required"},
+               {"Count", "must be a whole number"},
+               {"Done", "must be yes or no"}
              ]
     end
 
-    test "casting named fields leaves the others alone", %{schema: schema} do
+    test "only the named fields may be set", %{schema: schema} do
       assert Schema.cast(schema, %{"done" => true, "title" => "x"}, ["done"]) ==
-               {:ok, %{"done" => true}}
+               {:ok, %{title: nil, count: 2, done: true, note: nil}}
     end
 
     test "ignores keys the schema does not declare", %{schema: schema} do
       assert {:ok, values} = Schema.cast(schema, %{"title" => "x", "nonsense" => "y"})
-      refute Map.has_key?(values, "nonsense")
+      refute Map.has_key?(values, :nonsense)
+    end
+  end
+
+  describe "change/4" do
+    setup do
+      json = """
+      {"name": "t", "fields": [
+        {"name": "title", "required": true},
+        {"name": "count", "type": "integer", "default": 2},
+        {"name": "done", "type": "boolean"}
+      ]}
+      """
+
+      {:ok, schema} = Schema.parse(json)
+
+      %{schema: schema, record: %{id: 7, title: "Write it", count: 1, done: false}}
+    end
+
+    test "applies the changes onto the record it was given", %{schema: schema, record: record} do
+      assert Schema.change(schema, record, %{"done" => "yes"}, ["done"]) ==
+               {:ok, %{id: 7, title: "Write it", count: 1, done: true}}
+    end
+
+    test "a field nobody named keeps what it had", %{schema: schema, record: record} do
+      assert {:ok, changed} = Schema.change(schema, record, %{"count" => "9"}, ["count"])
+
+      assert changed.title == "Write it"
+      assert changed.count == 9
+    end
+
+    test "a change that does not cast is refused", %{schema: schema, record: record} do
+      result = Schema.change(schema, record, %{"title" => "  "})
+
+      assert messages(result, schema) == [{"Title", "is required"}]
+    end
+
+    test "clearing an optional field clears it", %{schema: schema, record: record} do
+      assert {:ok, %{count: nil}} = Schema.change(schema, record, %{"count" => ""}, ["count"])
+    end
+  end
+
+  describe "types/1 and defaults/1" do
+    test "give Ecto what a changeset needs" do
+      {:ok, schema} = Schema.load("todo")
+
+      assert Schema.types(schema) == %{title: :string, priority: :integer, done: Boolean}
+      assert Schema.defaults(schema) == %{title: nil, priority: 2, done: false}
+    end
+  end
+
+  describe "the yes/no type" do
+    test "takes the words a person types" do
+      for yes <- ~w(true yes Y 1 on), do: assert(Boolean.cast(yes) == {:ok, true})
+      for no <- ~w(false no N 0 OFF), do: assert(Boolean.cast(no) == {:ok, false})
+
+      assert Boolean.cast(true) == {:ok, true}
+      assert Boolean.cast("maybe") == :error
+      assert Boolean.cast(3) == :error
+    end
+
+    test "stores and loads a plain boolean" do
+      assert Boolean.dump(true) == {:ok, true}
+      assert Boolean.load(false) == {:ok, false}
+      assert Boolean.type() == :boolean
     end
   end
 

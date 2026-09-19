@@ -38,7 +38,7 @@ defmodule ITui.Views.FormTest do
   end
 
   test "starts from the values it was given", %{schema: schema} do
-    values = %{"title" => "Write it", "priority" => 1, "done" => true}
+    values = %{title: "Write it", priority: 1, done: true}
     screen = schema |> start_form(values: values, title: "Edit todo") |> text()
 
     assert screen =~ "Edit todo"
@@ -74,7 +74,7 @@ defmodule ITui.Views.FormTest do
     type(ui, "Write it")
     press(ui, [:tab, :home, :delete, {:char, "1"}, :tab, {:char, " "}, :enter])
 
-    assert result(ui) == {:submitted, %{"title" => "Write it", "priority" => 1, "done" => true}}
+    assert result(ui) == {:submitted, %{title: "Write it", priority: 1, done: true}}
   end
 
   test "enter with a mistake in it stays open and says what is wrong", %{schema: schema} do

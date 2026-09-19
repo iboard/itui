@@ -156,7 +156,7 @@ defmodule ITui.Views.Todo do
     style = if selected?, do: Style.new(fg: :black, bg: :bright_cyan)
     marker = if selected?, do: "▸ ", else: "  "
     box = if done?(todo), do: "[x] ", else: "[ ] "
-    title = Screen.truncate(to_string(todo["title"]), max(rect.width - 12, 1))
+    title = Screen.truncate(to_string(todo[:title]), max(rect.width - 12, 1))
 
     screen
     |> Screen.fill(rect, " ", style)
@@ -173,12 +173,12 @@ defmodule ITui.Views.Todo do
     schema.fields
     |> Enum.reject(&(&1.name in ["title", "done"]))
     |> Enum.map_join("  ", fn field ->
-      "#{field.label}: #{Field.format(field, todo[field.name])}"
+      "#{field.label}: #{Field.format(field, todo[field.key])}"
     end)
   end
 
   defp footer(%{confirming: id} = state, width) when not is_nil(id) do
-    title = state.todos |> Enum.find(&(&1["id"] == id)) |> Kernel.||(%{}) |> Map.get("title", "")
+    title = state.todos |> Enum.find(&(&1[:id] == id)) |> Kernel.||(%{}) |> Map.get(:title, "")
 
     Screen.truncate(~s(delete "#{title}"? y / n), width)
   end
@@ -206,7 +206,7 @@ defmodule ITui.Views.Todo do
 
   defp edit(state, todo) do
     {:push, Form, form_opts(state, "Edit #{item_label(state)}", todo),
-     %{state | editing: todo["id"]}}
+     %{state | editing: todo[:id]}}
   end
 
   defp form_opts(state, title, values) do
@@ -214,11 +214,11 @@ defmodule ITui.Views.Todo do
   end
 
   defp save(%{editing: :new} = state, attrs) do
-    state.schema |> Repo.insert(attrs) |> handled(state)
+    state.schema |> Repo.insert(params(state, attrs)) |> handled(state)
   end
 
   defp save(%{editing: id} = state, attrs) when is_integer(id) do
-    state.schema |> Repo.update(id, attrs) |> handled(state)
+    state.schema |> Repo.update(id, params(state, attrs)) |> handled(state)
   end
 
   defp save(state, _attrs), do: state
@@ -226,7 +226,13 @@ defmodule ITui.Views.Todo do
   defp toggle(state, nil), do: state
 
   defp toggle(state, todo) do
-    state.schema |> Repo.update(todo["id"], %{"done" => not done?(todo)}) |> handled(state)
+    state.schema |> Repo.update(todo[:id], %{"done" => not done?(todo)}) |> handled(state)
+  end
+
+  # The form hands back a record; the repository casts parameters, which are
+  # named the way a form names them.
+  defp params(state, attrs) do
+    Map.new(state.schema.fields, fn field -> {field.name, Map.get(attrs, field.key)} end)
   end
 
   defp delete(state, id) do
@@ -234,16 +240,18 @@ defmodule ITui.Views.Todo do
   end
 
   defp confirm(state, nil), do: state
-  defp confirm(state, todo), do: %{state | confirming: todo["id"]}
+  defp confirm(state, todo), do: %{state | confirming: todo[:id]}
 
   defp handled(:ok, state), do: reload(state)
   defp handled({:ok, _record}, state), do: reload(state)
-  defp handled({:error, reason}, state), do: %{state | error: message(reason)}
+  defp handled({:error, reason}, state), do: %{state | error: message(state, reason)}
 
-  defp message(reason) when is_binary(reason), do: reason
+  defp message(_state, reason) when is_binary(reason), do: reason
 
-  defp message(errors) when is_list(errors) do
-    Enum.map_join(errors, "; ", fn {name, message} -> "#{name} #{message}" end)
+  defp message(state, %Ecto.Changeset{} = changeset) do
+    state.schema
+    |> Schema.errors(changeset)
+    |> Enum.map_join("; ", fn {field, message} -> "#{field.label} #{message}" end)
   end
 
   defp reload(%{schema: nil} = state), do: state
@@ -251,13 +259,13 @@ defmodule ITui.Views.Todo do
   defp reload(state) do
     case Repo.all(state.schema) do
       {:ok, todos} -> %{state | todos: todos, error: nil, cursor: clamp(state.cursor, todos)}
-      {:error, reason} -> %{state | error: message(reason)}
+      {:error, reason} -> %{state | error: message(state, reason)}
     end
   end
 
   defp current(state), do: Enum.at(state.todos, state.cursor)
 
-  defp done?(todo), do: todo["done"] == true
+  defp done?(todo), do: todo[:done] == true
 
   defp move(state, by) do
     case length(state.todos) do

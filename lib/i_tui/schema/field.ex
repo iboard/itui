@@ -3,17 +3,13 @@ defmodule ITui.Schema.Field do
   One field of a schema: what it is called, what it holds, and how to read it.
 
   A field is what a form draws a row for and what a record keeps a key for, so
-  the same declaration serves both. `cast/2` turns whatever a form collected —
-  always text, or a toggle's `true`/`false` — into the value the field is
-  declared to hold, or says why it cannot.
+  the same declaration serves both. The type is an `Ecto.Type` — `:string`,
+  `:integer` or `ITui.Schema.Boolean` — and `ITui.Schema` builds an
+  `Ecto.Changeset` out of a schema's fields to cast whatever a form collected.
 
       iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "count", "type" => "integer"})
-      iex> ITui.Schema.Field.cast(field, "3")
-      {:ok, 3}
-
-      iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "count", "type" => "integer"})
-      iex> ITui.Schema.Field.cast(field, "three")
-      {:error, "must be a whole number"}
+      iex> {field.key, field.type}
+      {:count, :integer}
 
   ## The shape of a field
 
@@ -22,28 +18,26 @@ defmodule ITui.Schema.Field do
         "label": "Title",         // optional: what the form calls it
         "type": "string",         // string (default), integer or boolean
         "required": true,         // optional
-        "default": "",            // optional: used when the key is absent
+        "default": "",            // optional: the value before anything is typed
         "placeholder": "what to do"
       }
   """
 
-  defstruct [:name, :label, :default, :placeholder, type: :string, required: false]
+  alias ITui.Schema.Boolean
 
-  @type type :: :string | :integer | :boolean
+  defstruct [:name, :key, :label, :default, :placeholder, type: :string, required: false]
 
   @type t :: %__MODULE__{
           name: String.t(),
+          key: atom(),
           label: String.t(),
-          type: type(),
+          type: Ecto.Type.t(),
           required: boolean(),
           default: term(),
           placeholder: String.t() | nil
         }
 
-  @types %{"string" => :string, "integer" => :integer, "boolean" => :boolean}
-
-  @truthy ~w(true yes y 1 on)
-  @falsy ~w(false no n 0 off)
+  @types %{"string" => :string, "integer" => :integer, "boolean" => Boolean}
 
   @doc """
   Parses one decoded JSON object into a field.
@@ -54,6 +48,9 @@ defmodule ITui.Schema.Field do
          {:ok, type} <- type(map, name) do
       field = %__MODULE__{
         name: name,
+        # Field names come from the application's own schema files, a list as
+        # bounded as the files themselves — not from anything a user types.
+        key: String.to_atom(name),
         label: label(map, name),
         type: type,
         required: map["required"] == true,
@@ -67,54 +64,28 @@ defmodule ITui.Schema.Field do
   def from_map(other), do: {:error, "expected a field object, got: #{inspect(other)}"}
 
   @doc """
-  Casts one value to the field's type.
+  Casts one value to the field's type, the way `Ecto.Type.cast/2` does.
 
-  `nil` means the key was absent, which is where a default applies; a field
-  that is required and has neither is an error. Values that are already of the
-  right type pass straight through, so a toggle's `true` needs no round trip
-  through "yes".
+      iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "n", "type" => "integer"})
+      iex> {ITui.Schema.Field.cast(field, "3"), ITui.Schema.Field.cast(field, "three")}
+      {{:ok, 3}, :error}
+
   """
-  @spec cast(t(), term()) :: {:ok, term()} | {:error, String.t()}
-  def cast(%__MODULE__{default: default} = field, nil) when not is_nil(default) do
-    cast(field, default)
-  end
+  @spec cast(t(), term()) :: {:ok, term()} | :error
+  def cast(%__MODULE__{type: type}, value), do: Ecto.Type.cast(type, value)
 
-  def cast(%__MODULE__{required: true}, nil), do: {:error, "is required"}
-  def cast(%__MODULE__{type: :boolean}, nil), do: {:ok, false}
-  def cast(%__MODULE__{}, nil), do: {:ok, nil}
+  @doc """
+  The message a form shows when a value will not cast.
 
-  def cast(%__MODULE__{type: :string} = field, value) do
-    case value |> to_string() |> String.trim() do
-      "" -> if field.required, do: {:error, "is required"}, else: {:ok, ""}
-      trimmed -> {:ok, trimmed}
-    end
-  end
+      iex> {:ok, field} = ITui.Schema.Field.from_map(%{"name" => "n", "type" => "integer"})
+      iex> ITui.Schema.Field.invalid_message(field.type)
+      "must be a whole number"
 
-  def cast(%__MODULE__{type: :integer}, value) when is_integer(value), do: {:ok, value}
-
-  def cast(%__MODULE__{type: :integer} = field, value) do
-    case value |> to_string() |> String.trim() do
-      "" ->
-        if field.required, do: {:error, "is required"}, else: {:ok, nil}
-
-      trimmed ->
-        case Integer.parse(trimmed) do
-          {number, ""} -> {:ok, number}
-          _otherwise -> {:error, "must be a whole number"}
-        end
-    end
-  end
-
-  def cast(%__MODULE__{type: :boolean}, value) when is_boolean(value), do: {:ok, value}
-
-  def cast(%__MODULE__{type: :boolean}, value) do
-    case value |> to_string() |> String.trim() |> String.downcase() do
-      truthy when truthy in @truthy -> {:ok, true}
-      falsy when falsy in @falsy -> {:ok, false}
-      "" -> {:ok, false}
-      _otherwise -> {:error, "must be yes or no"}
-    end
-  end
+  """
+  @spec invalid_message(Ecto.Type.t()) :: String.t() | nil
+  def invalid_message(:integer), do: "must be a whole number"
+  def invalid_message(Boolean), do: "must be yes or no"
+  def invalid_message(_type), do: nil
 
   @doc """
   The value as a form or a list would show it.
@@ -125,10 +96,18 @@ defmodule ITui.Schema.Field do
 
   """
   @spec format(t(), term()) :: String.t()
-  def format(%__MODULE__{type: :boolean}, true), do: "yes"
-  def format(%__MODULE__{type: :boolean}, _value), do: "no"
+  def format(%__MODULE__{type: Boolean}, true), do: "yes"
+  def format(%__MODULE__{type: Boolean}, _value), do: "no"
   def format(%__MODULE__{}, nil), do: ""
   def format(%__MODULE__{}, value), do: to_string(value)
+
+  @doc """
+  The value a field starts at when nothing has been stored: its default, or
+  nothing at all — except a yes/no field, which is always one or the other.
+  """
+  @spec default(t()) :: term()
+  def default(%__MODULE__{type: Boolean, default: nil}), do: false
+  def default(%__MODULE__{default: default}), do: default
 
   defp name(%{"name" => name}) when is_binary(name) and name != "", do: {:ok, name}
   defp name(map), do: {:error, "a field needs a name: #{inspect(map)}"}
@@ -150,7 +129,7 @@ defmodule ITui.Schema.Field do
 
   defp type(_map, _name), do: {:ok, :string}
 
-  # A default is declared in the file the way a value is written, so it goes
+  # A default is written in the file the way a value is written, so it goes
   # through the same cast as anything typed into the form.
   defp default(field, map) do
     case Map.fetch(map, "default") do
@@ -158,9 +137,13 @@ defmodule ITui.Schema.Field do
         {:ok, field}
 
       {:ok, value} ->
-        case cast(%{field | required: false, default: nil}, value) do
-          {:ok, default} -> {:ok, %{field | default: default}}
-          {:error, message} -> {:error, ~s(the default of "#{field.name}" #{message})}
+        case cast(field, value) do
+          {:ok, default} ->
+            {:ok, %{field | default: default}}
+
+          :error ->
+            message = invalid_message(field.type) || "is not a #{inspect(field.type)}"
+            {:error, ~s(the default of "#{field.name}" #{message})}
         end
     end
   end

@@ -46,8 +46,11 @@ defmodule ITui.Command do
   names into its arguments; a placeholder with nothing to fill it becomes an
   empty argument, which is why a field a command needs should be required.
 
+  The values are a record as `ITui.Schema` casts them, keyed by atoms — or the
+  parameters that went in, keyed by strings. Either will do.
+
       iex> ITui.Command.new("ping", ["-c", "{{count}}", "{{host}}"])
-      ...> |> ITui.Command.render(%{"count" => 3, "host" => "example.com"})
+      ...> |> ITui.Command.render(%{count: 3, host: "example.com"})
       ...> |> ITui.Command.to_string()
       "ping -c 3 example.com"
 
@@ -86,7 +89,21 @@ defmodule ITui.Command do
 
   defp fill(arg, params) do
     Regex.replace(~r/\{\{([a-zA-Z0-9_]+)\}\}/, arg, fn _match, name ->
-      Kernel.to_string(Map.get(params, name, ""))
+      Kernel.to_string(value(params, name))
     end)
+  end
+
+  defp value(params, name) do
+    case Map.fetch(params, name) do
+      {:ok, value} -> value
+      :error -> Map.get(params, existing_atom(name), "")
+    end
+  end
+
+  # A name no field ever declared has no atom, and nothing to fill it either.
+  defp existing_atom(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> nil
   end
 end

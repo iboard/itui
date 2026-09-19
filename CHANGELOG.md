@@ -27,3 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing else.
 - Menu entries can open an application (`"view"`) and can ask for a command's
   arguments first (`"form"`), filling the `{{placeholders}}` in its arguments.
+
+### Changed
+
+- Casting and validation are `Ecto.Changeset`s built from the schema files —
+  `ITui.Schema.changeset/4`, `cast/3`, `change/4` and `errors/2` — with
+  `ITui.Schema.Boolean` as a custom `Ecto.Type` for a yes/no field. There is no
+  database and no `ecto_sql`: the changesets end in
+  `Ecto.Changeset.apply_action/2` and the JSON file is the store.
+- Records are keyed by the field names as atoms, the way a changeset applies
+  them; the JSON on disk is unchanged, and a key nobody declared survives being
+  read and written back.

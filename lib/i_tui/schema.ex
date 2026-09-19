@@ -1,6 +1,6 @@
 defmodule ITui.Schema do
   @moduledoc """
-  A data structure described in a file, and the casting of values into it.
+  A data structure described in a file, cast and validated with Ecto.
 
   One declaration serves two purposes: it is what `ITui.Views.Form` draws a row
   for, and it is what `ITui.Repo` stores. A form collecting the parameters of a
@@ -23,9 +23,29 @@ defmodule ITui.Schema do
   where `ITui.Repo` keeps the records, and only matters for a schema that is
   stored; a form collecting the arguments of a command has no source at all.
 
+  ## Ecto without a database
+
+  The fields are only known when the file is read, so there is no module to
+  `use Ecto.Schema` in — and no need for one. `Ecto.Changeset` takes a
+  `{data, types}` pair as readily as it takes a struct, so `changeset/4` builds
+  the types out of the fields and hands Ecto the same job it does anywhere
+  else: cast the parameters, trim them, say what is missing, and apply the
+  changes onto the record.
+
+      iex> {:ok, schema} = ITui.Schema.load("todo")
+      iex> changeset = ITui.Schema.changeset(schema, %{}, %{"title" => ""})
+      iex> Enum.map(ITui.Schema.errors(schema, changeset), fn {f, m} -> {f.label, m} end)
+      [{"Title", "is required"}]
+
+  What comes out is a plain map keyed by the field names as atoms — the record
+  `ITui.Repo` stores. There is no repository behind the changesets: `cast/3`
+  and `change/4` end in `Ecto.Changeset.apply_action/2`, and the JSON file is
+  the database.
+
   See `ITui.Schema.Field` for what a field may say about itself.
   """
 
+  alias Ecto.Changeset
   alias ITui.Schema.Field
 
   defstruct [:name, :label, :title, :source, fields: []]
@@ -37,6 +57,8 @@ defmodule ITui.Schema do
           source: Path.t() | nil,
           fields: [Field.t()]
         }
+
+  @type record :: %{atom() => term()}
 
   @doc """
   Reads a schema by name, or from an explicit path.
@@ -82,11 +104,13 @@ defmodule ITui.Schema do
   def from_map(%{"fields" => fields} = map) when is_list(fields) do
     with {:ok, name} <- name(map),
          {:ok, fields} <- parse_fields(fields, name) do
+      label = label(map, name)
+
       {:ok,
        %__MODULE__{
          name: name,
-         label: label(map, name),
-         title: title(map, label(map, name)),
+         label: label,
+         title: title(map, label),
          source: source(map, name),
          fields: fields
        }}
@@ -97,75 +121,151 @@ defmodule ITui.Schema do
   def from_map(other), do: {:error, "expected a schema object, got: #{inspect(other)}"}
 
   @doc """
-  Casts a form's parameters into the values the schema declares.
+  A changeset over `data`, casting the parameters the schema declares.
 
-  Keys are the field names as strings; anything the schema does not declare is
-  dropped, and anything it declares and the parameters do not mention falls
-  back to the field's default. Every field is cast before the result is
-  decided, so a form shows all of its mistakes at once rather than one per
-  attempt.
+  Parameters are keyed by the field names as strings, the way a form hands them
+  over; everything the schema does not declare is dropped. `fields` names what
+  may change — `:all`, or the names of the fields an update was given, so
+  setting one key does not disturb the rest of the record.
+
+  An empty string clears the field it was typed into — emptying the text, or
+  emptying a number altogether — and a required field refuses to be blank
+  whatever its type.
+  """
+  @spec changeset(t(), record(), map(), :all | [String.t() | atom()]) :: Changeset.t()
+  def changeset(%__MODULE__{} = schema, data, params, fields \\ :all) do
+    casting = fields(schema, fields)
+    {text, rest} = Enum.split_with(casting, &(&1.type == :string))
+
+    {data, types(schema)}
+    |> Changeset.cast(params, keys(rest), message: &message/2)
+    |> Changeset.cast(params, keys(text), empty_values: [], message: &message/2)
+    |> trim(text)
+    |> validate_required(casting)
+  end
+
+  @doc """
+  Casts parameters into a new record, starting from the schema's defaults.
 
       iex> {:ok, schema} = ITui.Schema.parse(~s({"name": "t", "fields": [{"name": "n", "type": "integer"}]}))
       iex> ITui.Schema.cast(schema, %{"n" => "12", "ignored" => "x"})
-      {:ok, %{"n" => 12}}
-
-      iex> {:ok, schema} = ITui.Schema.parse(~s({"name": "t", "fields": [{"name": "n", "type": "integer"}]}))
-      iex> ITui.Schema.cast(schema, %{"n" => "x"})
-      {:error, [{"n", "must be a whole number"}]}
-
-  Naming the fields casts only those, which is what an update does:
-
-      iex> json = ~s({"name": "t", "fields": [{"name": "a"}, {"name": "b"}]})
-      iex> {:ok, schema} = ITui.Schema.parse(json)
-      iex> ITui.Schema.cast(schema, %{"a" => "new"}, ["a"])
-      {:ok, %{"a" => "new"}}
+      {:ok, %{n: 12}}
 
   """
-  @spec cast(t(), map(), :all | [String.t()]) ::
-          {:ok, map()} | {:error, [{String.t(), String.t()}]}
-  def cast(schema, params, fields \\ :all)
-
-  def cast(%__MODULE__{} = schema, params, fields) when is_map(params) do
-    {values, errors} =
-      schema
-      |> fields(fields)
-      |> Enum.reduce({%{}, []}, fn field, {values, errors} ->
-        case Field.cast(field, Map.get(params, field.name)) do
-          {:ok, value} -> {Map.put(values, field.name, value), errors}
-          {:error, message} -> {values, [{field.name, message} | errors]}
-        end
-      end)
-
-    case errors do
-      [] -> {:ok, values}
-      errors -> {:error, Enum.reverse(errors)}
-    end
+  @spec cast(t(), map(), :all | [String.t() | atom()]) ::
+          {:ok, record()} | {:error, Changeset.t()}
+  def cast(%__MODULE__{} = schema, params, fields \\ :all) do
+    schema |> changeset(defaults(schema), params, fields) |> Changeset.apply_action(:insert)
   end
+
+  @doc """
+  Casts parameters onto a record that already exists.
+
+  What comes back is the whole record with the changes applied, so a repository
+  has nothing left to merge.
+  """
+  @spec change(t(), record(), map(), :all | [String.t() | atom()]) ::
+          {:ok, record()} | {:error, Changeset.t()}
+  def change(%__MODULE__{} = schema, record, params, fields \\ :all) do
+    schema |> changeset(record, params, fields) |> Changeset.apply_action(:update)
+  end
+
+  @doc """
+  What went wrong, as `{field, message}` in the order the fields are declared.
+
+  A form shows them under the rows — and puts the cursor back on the first
+  field that was wrong — so it gets the field itself rather than its name.
+  """
+  @spec errors(t(), Changeset.t()) :: [{Field.t(), String.t()}]
+  def errors(%__MODULE__{} = schema, %Changeset{} = changeset) do
+    messages = Changeset.traverse_errors(changeset, &interpolate/1)
+
+    for field <- schema.fields,
+        message <- Map.get(messages, field.key, []),
+        do: {field, message}
+  end
+
+  @doc """
+  The Ecto type of every field, which is what `Ecto.Changeset.cast/4` needs.
+
+      iex> {:ok, schema} = ITui.Schema.load("todo")
+      iex> ITui.Schema.types(schema)
+      %{title: :string, priority: :integer, done: ITui.Schema.Boolean}
+
+  """
+  @spec types(t()) :: %{atom() => Ecto.Type.t()}
+  def types(%__MODULE__{fields: fields}), do: Map.new(fields, &{&1.key, &1.type})
+
+  @doc """
+  The record a new one starts from: every field at its default.
+  """
+  @spec defaults(t()) :: record()
+  def defaults(%__MODULE__{fields: fields}), do: Map.new(fields, &{&1.key, Field.default(&1)})
 
   @doc """
   The fields to cast: every one of them, or the ones named.
 
-  An update casts only what it was given, so setting one key does not reset
-  the rest of the record to the defaults of the fields nobody mentioned.
+  Names may be strings, as a form's parameters have them, or atoms.
   """
-  @spec fields(t(), :all | [String.t()]) :: [Field.t()]
+  @spec fields(t(), :all | [String.t() | atom()]) :: [Field.t()]
   def fields(%__MODULE__{fields: fields}, :all), do: fields
 
   def fields(%__MODULE__{fields: fields}, names) when is_list(names) do
+    names = Enum.map(names, &to_string/1)
+
     Enum.filter(fields, &(&1.name in names))
   end
 
   @doc """
-  The field called `name`, or `nil`.
+  The field called `name`, or `nil`. The name may be a string or an atom.
   """
-  @spec field(t(), String.t()) :: Field.t() | nil
-  def field(%__MODULE__{fields: fields}, name), do: Enum.find(fields, &(&1.name == name))
+  @spec field(t(), String.t() | atom()) :: Field.t() | nil
+  def field(%__MODULE__{fields: fields}, name) do
+    name = to_string(name)
+
+    Enum.find(fields, &(&1.name == name))
+  end
 
   @doc """
   Where the records of this schema are kept.
   """
   @spec source(t()) :: Path.t() | nil
   def source(%__MODULE__{source: source}), do: source
+
+  # Ecto trims only to decide whether a value is empty; a form has its own
+  # reasons to want the spaces gone.
+  defp trim(changeset, fields) do
+    fields
+    |> Enum.filter(&(&1.type == :string))
+    |> Enum.reduce(changeset, fn field, acc ->
+      Changeset.update_change(acc, field.key, fn
+        value when is_binary(value) -> String.trim(value)
+        value -> value
+      end)
+    end)
+  end
+
+  # An empty string means two different things, so it is cast twice. For a
+  # number or a yes/no it is nothing, and clearing the field empties it; for
+  # text it is a value, and clearing the field stores that. For a field that
+  # is required it is nothing again, whatever its type — which is what a
+  # person filling in a form means by leaving it blank.
+  defp validate_required(changeset, fields) do
+    required = fields |> Enum.filter(& &1.required) |> keys()
+
+    %{changeset | empty_values: [""]}
+    |> Changeset.validate_required(required, message: "is required")
+  end
+
+  defp keys(fields), do: Enum.map(fields, & &1.key)
+
+  defp message(_key, metadata), do: Field.invalid_message(Keyword.get(metadata, :type))
+
+  defp interpolate({message, opts}) do
+    Regex.replace(~r/%\{(\w+)\}/, message, fn _whole, key ->
+      opts |> Keyword.get(String.to_existing_atom(key), "") |> to_string()
+    end)
+  end
 
   defp path(name) do
     if String.ends_with?(name, ".json") do

@@ -50,7 +50,7 @@ defmodule ITui.Views.TodoTest do
     assert screen =~ "Priority: 2"
     assert screen =~ "1 todo, 0 done"
 
-    assert {:ok, [%{"title" => "Write the docs", "priority" => 2, "done" => false}]} =
+    assert {:ok, [%{title: "Write the docs", priority: 2, done: false}]} =
              Repo.all(schema)
   end
 
@@ -70,10 +70,10 @@ defmodule ITui.Views.TodoTest do
 
     assert press(ui, {:char, " "}) =~ "▸ [x] Write the docs"
     assert text(ui) =~ "1 todo, 1 done"
-    assert {:ok, [%{"done" => true}]} = Repo.all(schema)
+    assert {:ok, [%{done: true}]} = Repo.all(schema)
 
     assert press(ui, {:char, " "}) =~ "▸ [ ] Write the docs"
-    assert {:ok, [%{"done" => false}]} = Repo.all(schema)
+    assert {:ok, [%{done: false}]} = Repo.all(schema)
   end
 
   test "enter edits the one under the cursor", %{ui: ui, schema: schema} do
@@ -86,7 +86,7 @@ defmodule ITui.Views.TodoTest do
     press(ui, [:end, {:char, "!"}, :enter])
 
     assert settle(ui) =~ "Write the docs!"
-    assert {:ok, [%{"title" => "Write the docs!", "id" => 1}]} = Repo.all(schema)
+    assert {:ok, [%{title: "Write the docs!", id: 1}]} = Repo.all(schema)
   end
 
   test "the arrows move the cursor through the list", %{ui: ui} do
@@ -117,7 +117,7 @@ defmodule ITui.Views.TodoTest do
 
     refute screen =~ "Write the docs"
     assert screen =~ "And the tests"
-    assert {:ok, [%{"title" => "And the tests"}]} = Repo.all(schema)
+    assert {:ok, [%{title: "And the tests"}]} = Repo.all(schema)
   end
 
   test "the cursor stays inside the list after a delete", %{ui: ui} do

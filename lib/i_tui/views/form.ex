@@ -26,7 +26,7 @@ defmodule ITui.Views.Form do
 
   alias Atui.{Layout, Style, Text, TextInput}
   alias ITui.Schema
-  alias ITui.Schema.Field
+  alias ITui.Schema.{Boolean, Field}
   alias ITui.Views.Popup
 
   @label_width 20
@@ -94,18 +94,12 @@ defmodule ITui.Views.Form do
     |> Screen.box(rect, title: " #{state.title} ", style: Style.new(fg: :bright_black))
   end
 
-  defp widget(%Field{type: :boolean} = field, values) do
-    {:ok, checked} = Field.cast(field, Map.get(values, field.name))
-
-    %{field: field, input: nil, checked: checked}
+  defp widget(%Field{type: Boolean} = field, values) do
+    %{field: field, input: nil, checked: starting_value(field, values) == true}
   end
 
   defp widget(%Field{} = field, values) do
-    value =
-      case Map.fetch(values, field.name) do
-        {:ok, value} -> Field.format(field, value)
-        :error -> Field.format(field, field.default)
-      end
+    value = Field.format(field, starting_value(field, values))
 
     %{
       field: field,
@@ -113,6 +107,8 @@ defmodule ITui.Views.Form do
       checked: nil
     }
   end
+
+  defp starting_value(field, values), do: Map.get(values, field.key, Field.default(field))
 
   defp row(screen, state, widget, index, rect) do
     focused? = index == state.focus
@@ -142,7 +138,7 @@ defmodule ITui.Views.Form do
 
   defp errors(screen, state, rect) do
     state.errors
-    |> Enum.map(fn {name, message} -> "#{label_of(state, name)} #{message}" end)
+    |> Enum.map(fn {field, message} -> "#{field.label} #{message}" end)
     |> Enum.take(max(rect.height - 1, 0))
     |> Enum.with_index(rect.y + 1)
     |> Enum.reduce(screen, fn {message, y}, acc ->
@@ -159,8 +155,13 @@ defmodule ITui.Views.Form do
 
   defp submit(state) do
     case Schema.cast(state.schema, params(state)) do
-      {:ok, attrs} -> {:pop, %{state | result: {:submitted, attrs}}}
-      {:error, errors} -> {:ok, %{state | errors: errors, focus: focus_of(state, errors)}}
+      {:ok, attrs} ->
+        {:pop, %{state | result: {:submitted, attrs}}}
+
+      {:error, changeset} ->
+        errors = Schema.errors(state.schema, changeset)
+
+        {:ok, %{state | errors: errors, focus: focus_of(state, errors)}}
     end
   end
 
@@ -199,16 +200,11 @@ defmodule ITui.Views.Form do
 
   # The cursor lands on the first field that was wrong, which is where the
   # person has to go anyway.
-  defp focus_of(state, [{name, _message} | _rest]) do
-    Enum.find_index(state.widgets, &(&1.field.name == name)) || state.focus
+  defp focus_of(state, [{field, _message} | _rest]) do
+    Enum.find_index(state.widgets, &(&1.field.key == field.key)) || state.focus
   end
 
-  defp label_of(state, name) do
-    case Schema.field(state.schema, name) do
-      nil -> name
-      field -> field.label
-    end
-  end
+  defp focus_of(state, _errors), do: state.focus
 
   # The required marker is part of the label as far as the columns care.
   defp label_width(state) do

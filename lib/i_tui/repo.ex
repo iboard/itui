@@ -16,16 +16,22 @@ defmodule ITui.Repo do
 
   ## Records
 
-  A record is a plain map with string keys. Three of them belong to the
-  repository rather than to the schema: `"id"`, `"inserted_at"` and
-  `"updated_at"`.
+  A record is a plain map keyed by the field names as atoms — what
+  `ITui.Schema` casts its parameters into. Three of the keys belong to the
+  repository rather than to the schema: `:id`, `:inserted_at` and
+  `:updated_at`.
+
+  Parameters going the other way are keyed by the field names as strings, the
+  way a form hands them over. Anything that will not cast comes back as
+  `{:error, %Ecto.Changeset{}}`, which `ITui.Schema.errors/2` turns into
+  something to show.
   """
 
   alias ITui.Schema
 
   @type id :: integer()
-  @type record :: %{String.t() => term()}
-  @type reason :: String.t() | [{String.t(), String.t()}]
+  @type record :: Schema.record()
+  @type reason :: String.t() | Ecto.Changeset.t()
 
   @doc "Every record of the schema, oldest first."
   @callback all(Schema.t()) :: {:ok, [record()]} | {:error, reason()}
