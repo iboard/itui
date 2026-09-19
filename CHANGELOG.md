@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from.
 - Rows are coloured by how near their due date is: green once done, red past
   it, yellow within two days, orange within the rest of the calendar week,
-  white otherwise.
+  white for the rest of the month, light blue beyond it.
 - The todo list is a sortable, ruled table — `←`/`→` move the sort from column
   to column, `r` turns it the other way up, `R` re-reads the file — with a
   serial number, `description` and `url` fields, a `Created` column and a

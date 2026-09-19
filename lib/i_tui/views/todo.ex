@@ -21,8 +21,9 @@ defmodule ITui.Views.Todo do
 
   A todo that is done is green, and the rest are coloured by how near their
   `due` date is: red once it has gone by, yellow within two days, orange
-  within what is left of this calendar week, and white when it is further off
-  than that or not due on any particular day. Today's date is at the top of
+  within what is left of this calendar week, white for the rest of this month
+  and light blue beyond it — and white again for a todo that is not due on any
+  particular day. Today's date is at the top of
   the screen, because it is what all of that is reckoned from — the same value
   the colours are worked out with, not a second reading of the clock. The row the cursor is on keeps
   its colour and takes a background instead, so the one thing the colour says
@@ -59,6 +60,8 @@ defmodule ITui.Views.Todo do
   @soon_days 2
   # The 256-colour palette's orange, between the yellow and the red.
   @orange 208
+  # And its light blue, for what is far enough off to be somebody else's week.
+  @sky 117
 
   @impl Atui.View
   def mount(opts) do
@@ -400,7 +403,8 @@ defmodule ITui.Views.Todo do
       Date.before?(date, today) -> :overdue
       Date.diff(date, today) <= @soon_days -> :soon
       not Date.after?(date, Date.end_of_week(today)) -> :week
-      true -> :plain
+      not Date.after?(date, Date.end_of_month(today)) -> :plain
+      true -> :later
     end
   end
 
@@ -408,6 +412,7 @@ defmodule ITui.Views.Todo do
   defp tone_style(:overdue), do: Style.new(fg: :bright_red)
   defp tone_style(:soon), do: Style.new(fg: :bright_yellow)
   defp tone_style(:week), do: Style.new(fg: @orange)
+  defp tone_style(:later), do: Style.new(fg: @sky)
   defp tone_style(:plain), do: Style.new(fg: :white)
 
   defp cell(%Field{type: Boolean} = field, todo) do

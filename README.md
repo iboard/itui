@@ -233,7 +233,8 @@ takes the date away again.
 | red | past its due date |
 | yellow | due within two days |
 | orange | due within what is left of this calendar week |
-| white | due later than that, or not due on any particular day |
+| white | due later than that but still this month, or not due on any particular day |
+| light blue | due beyond the end of this month |
 
 Today's date is at the top of the screen, because it is what all of that is
 reckoned from — the same value the colours are worked out with, not a second

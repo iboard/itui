@@ -445,6 +445,8 @@ defmodule ITui.Views.TodoColourTest do
         %{"title" => "Later this week", "due" => "2026-09-17"},
         %{"title" => "Sunday, the last of it", "due" => "2026-09-20"},
         %{"title" => "Next week", "due" => "2026-09-21"},
+        %{"title" => "The last of the month", "due" => "2026-09-30"},
+        %{"title" => "The first of the next", "due" => "2026-10-01"},
         %{"title" => "Whenever"},
         %{"title" => "Done, and was overdue", "due" => "2026-09-01", "done" => true}
       ])
@@ -456,6 +458,8 @@ defmodule ITui.Views.TodoColourTest do
              {"Later this week", :week},
              {"Sunday, the last of it", :week},
              {"Next week", :plain},
+             {"The last of the month", :plain},
+             {"The first of the next", :later},
              {"Whenever", :plain},
              {"Done, and was overdue", :done}
            ]
@@ -468,6 +472,7 @@ defmodule ITui.Views.TodoColourTest do
         %{"title" => "In two days", "due" => "2026-09-16"},
         %{"title" => "Later this week", "due" => "2026-09-17"},
         %{"title" => "Next week", "due" => "2026-09-21"},
+        %{"title" => "Next month", "due" => "2026-10-05"},
         %{"title" => "Done", "done" => true}
       ])
 
@@ -477,7 +482,8 @@ defmodule ITui.Views.TodoColourTest do
     assert %{fg: :bright_yellow, bg: nil} = style(ui, 1)
     assert %{fg: 208, bg: nil} = style(ui, 2)
     assert %{fg: :white, bg: nil} = style(ui, 3)
-    assert %{fg: :green, bg: nil} = style(ui, 4)
+    assert %{fg: 117, bg: nil} = style(ui, 4)
+    assert %{fg: :green, bg: nil} = style(ui, 5)
 
     # Moving the cursor moves the background, not the colour.
     press(ui, :down)
