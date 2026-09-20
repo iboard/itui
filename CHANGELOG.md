@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-20
+
+### Changed
+
+- `ITui.Schema.record/0` and `ITui.Repo.record/0` are now `row/0`. Elixir 1.20
+  keeps `record/0` for itself, and a type that overrides a built-in one warns
+  on every compile — and stops a build where warnings are errors. Only the
+  name of the type has moved: it describes the same stored record, and the
+  prose still calls it that. Checked on 1.20.1 with OTP 29, 1.19.5 with OTP 28
+  and 1.18.5 with OTP 25.
+
 ## [0.1.2] - 2026-09-20
 
 ### Fixed

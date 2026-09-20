@@ -68,7 +68,12 @@ defmodule ITui.Schema do
           fields: [Field.t()]
         }
 
-  @type record :: %{atom() => term()}
+  @typedoc """
+  A record as it is stored: the schema's fields, keyed by their names as atoms.
+
+  Named `row` rather than `record` because Elixir keeps `record/0` for itself.
+  """
+  @type row :: %{atom() => term()}
 
   @doc """
   Reads a schema by name, or from an explicit path.
@@ -150,7 +155,7 @@ defmodule ITui.Schema do
   emptying a number altogether — and a required field refuses to be blank
   whatever its type.
   """
-  @spec changeset(t(), record(), map(), :all | [String.t() | atom()]) :: Changeset.t()
+  @spec changeset(t(), row(), map(), :all | [String.t() | atom()]) :: Changeset.t()
   def changeset(%__MODULE__{} = schema, data, params, fields \\ :all) do
     casting = fields(schema, fields)
     {text, rest} = Enum.split_with(casting, &(&1.type == :string))
@@ -171,7 +176,7 @@ defmodule ITui.Schema do
 
   """
   @spec cast(t(), map(), :all | [String.t() | atom()]) ::
-          {:ok, record()} | {:error, Changeset.t()}
+          {:ok, row()} | {:error, Changeset.t()}
   def cast(%__MODULE__{} = schema, params, fields \\ :all) do
     schema |> changeset(defaults(schema), params, fields) |> Changeset.apply_action(:insert)
   end
@@ -182,8 +187,8 @@ defmodule ITui.Schema do
   What comes back is the whole record with the changes applied, so a repository
   has nothing left to merge.
   """
-  @spec change(t(), record(), map(), :all | [String.t() | atom()]) ::
-          {:ok, record()} | {:error, Changeset.t()}
+  @spec change(t(), row(), map(), :all | [String.t() | atom()]) ::
+          {:ok, row()} | {:error, Changeset.t()}
   def change(%__MODULE__{} = schema, record, params, fields \\ :all) do
     schema |> changeset(record, params, fields) |> Changeset.apply_action(:update)
   end
@@ -217,7 +222,7 @@ defmodule ITui.Schema do
   @doc """
   The record a new one starts from: every field at its default.
   """
-  @spec defaults(t()) :: record()
+  @spec defaults(t()) :: row()
   def defaults(%__MODULE__{fields: fields}), do: Map.new(fields, &{&1.key, Field.default(&1)})
 
   @doc """

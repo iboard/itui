@@ -30,20 +30,21 @@ defmodule ITui.Repo do
   alias ITui.Schema
 
   @type id :: integer()
-  @type record :: Schema.record()
+  @typedoc "One stored record. See `t:ITui.Schema.row/0`."
+  @type row :: Schema.row()
   @type reason :: String.t() | Ecto.Changeset.t()
 
   @doc "Every record of the schema, oldest first."
-  @callback all(Schema.t()) :: {:ok, [record()]} | {:error, reason()}
+  @callback all(Schema.t()) :: {:ok, [row()]} | {:error, reason()}
 
   @doc "The record with this id."
-  @callback get(Schema.t(), id()) :: {:ok, record()} | {:error, reason()}
+  @callback get(Schema.t(), id()) :: {:ok, row()} | {:error, reason()}
 
   @doc "Stores a new record, casting the parameters through the schema."
-  @callback insert(Schema.t(), map()) :: {:ok, record()} | {:error, reason()}
+  @callback insert(Schema.t(), map()) :: {:ok, row()} | {:error, reason()}
 
   @doc "Casts and merges the given keys into the record with this id."
-  @callback update(Schema.t(), id(), map()) :: {:ok, record()} | {:error, reason()}
+  @callback update(Schema.t(), id(), map()) :: {:ok, row()} | {:error, reason()}
 
   @doc "Removes the record with this id."
   @callback delete(Schema.t(), id()) :: :ok | {:error, reason()}
@@ -53,19 +54,19 @@ defmodule ITui.Repo do
   def adapter, do: Application.get_env(:i_tui, :repo, ITui.Repo.Json)
 
   @doc "See `c:all/1`."
-  @spec all(Schema.t()) :: {:ok, [record()]} | {:error, reason()}
+  @spec all(Schema.t()) :: {:ok, [row()]} | {:error, reason()}
   def all(schema), do: adapter().all(schema)
 
   @doc "See `c:get/2`."
-  @spec get(Schema.t(), id()) :: {:ok, record()} | {:error, reason()}
+  @spec get(Schema.t(), id()) :: {:ok, row()} | {:error, reason()}
   def get(schema, id), do: adapter().get(schema, id)
 
   @doc "See `c:insert/2`."
-  @spec insert(Schema.t(), map()) :: {:ok, record()} | {:error, reason()}
+  @spec insert(Schema.t(), map()) :: {:ok, row()} | {:error, reason()}
   def insert(schema, params), do: adapter().insert(schema, params)
 
   @doc "See `c:update/3`."
-  @spec update(Schema.t(), id(), map()) :: {:ok, record()} | {:error, reason()}
+  @spec update(Schema.t(), id(), map()) :: {:ok, row()} | {:error, reason()}
   def update(schema, id, params), do: adapter().update(schema, id, params)
 
   @doc "See `c:delete/2`."
