@@ -46,10 +46,12 @@ defmodule ITui.MixProject do
   end
 
   # `app: nil` so that the application is not started before main/1 — asking
-  # for the version should not open a terminal UI — and `+Bc` so that Ctrl-C
-  # reaches the application rather than the BEAM's BREAK menu.
+  # for the version should not open a terminal UI — `+Bc` so that Ctrl-C
+  # reaches the application rather than the BEAM's BREAK menu, and `+fnu` so
+  # that a machine with no UTF-8 locale, which is most servers over ssh, still
+  # reads and writes filenames as UTF-8.
   defp escript do
-    [main_module: ITui.CLI, name: "itui", app: nil, emu_args: "+Bc"]
+    [main_module: ITui.CLI, name: "itui", app: nil, emu_args: "+Bc +fnu"]
   end
 
   defp description do

@@ -28,6 +28,12 @@ defmodule ITui.CLI do
   The commands that want a screen start it with `:view_opts` saying where to
   open (see `ITui.Views.MainMenu`); the rest never start it at all, and say
   what they have to say on standard output.
+
+  Standard output is set to Unicode as the first thing `main/1` does, because
+  a machine with no UTF-8 locale — which is most servers over ssh and every
+  one of them under cron — otherwise writes `\\x{2500}` where the table rules
+  and the box around the menu should be. It is the encoding of the device
+  rather than of the strings, so nothing else in iTUI has to know about it.
   """
 
   alias ITui.CLI.{Help, Todo}
@@ -42,6 +48,8 @@ defmodule ITui.CLI do
   """
   @spec main([String.t()]) :: :ok
   def main(argv) do
+    :io.setopts(:standard_io, encoding: :unicode)
+
     case command(argv) do
       {:open, opts} -> open(opts)
       {:say, text} -> IO.puts(text)
