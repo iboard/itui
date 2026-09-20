@@ -103,6 +103,92 @@ defmodule ITui.Menu do
     Enum.find(items, &(&1.key == key))
   end
 
+  @doc """
+  Walks a path of names into the menu: the entries it names, outermost first.
+
+  This is how the command line says where to go — `itui menu system/uptime` —
+  so a segment is written the way a person would write it rather than the way
+  the file does. It is matched against an entry's key first, then against its
+  label, ignoring case and punctuation, and then against the beginning of a
+  label as long as only one entry starts that way.
+
+      iex> {:ok, menu} = ITui.Menu.parse(~s({"items": [{"key": "s", "label": "System", "items": [{"label": "Disk free", "command": "df"}]}]}))
+      iex> {:ok, chain} = ITui.Menu.resolve(menu.items, ["s", "disk-free"])
+      iex> Enum.map(chain, & &1.label)
+      ["System", "Disk free"]
+
+  Returns `{:error, message}` for a name that matches nothing, a name that
+  matches more than one entry, and a path that goes on past an entry with
+  nothing inside it.
+  """
+  @spec resolve([Item.t()], [String.t()]) :: {:ok, [Item.t()]} | {:error, String.t()}
+  def resolve(items, segments) when is_list(items) and is_list(segments) do
+    segments
+    |> Enum.reduce_while({:ok, {items, []}}, fn segment, {:ok, {level, chain}} ->
+      case step(level, segment, chain) do
+        {:ok, item} -> {:cont, {:ok, {item.items || [], [item | chain]}}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, {_level, chain}} -> {:ok, Enum.reverse(chain)}
+      error -> error
+    end
+  end
+
+  defp step([], segment, chain) do
+    {:error, ~s(#{where(chain)} has nothing in it, so there is no "#{segment}" in it)}
+  end
+
+  defp step(items, segment, chain) do
+    case find(items, segment) do
+      {:ok, item} ->
+        {:ok, item}
+
+      {:error, :none} ->
+        {:error, ~s(there is no "#{segment}" in #{where(chain)}; there is: #{labels(items)})}
+
+      {:error, {:many, found}} ->
+        {:error, ~s("#{segment}" could be any of: #{labels(found)})}
+    end
+  end
+
+  @doc """
+  The entry of `items` that `name` names: its key, its label, or the beginning
+  of its label.
+
+  `{:error, :none}` when nothing matches and `{:error, {:many, items}}` when a
+  beginning matches more than one, which is a question rather than an answer.
+  """
+  @spec find([Item.t()], String.t()) :: {:ok, Item.t()} | {:error, :none | {:many, [Item.t()]}}
+  def find(items, name) when is_list(items) and is_binary(name) do
+    wanted = normalise(name)
+
+    with nil <- find_by_key(items, name),
+         nil <- Enum.find(items, &(normalise(&1.label) == wanted)) do
+      case Enum.filter(items, &String.starts_with?(normalise(&1.label), wanted)) do
+        [item] -> {:ok, item}
+        [] -> {:error, :none}
+        many -> {:error, {:many, many}}
+      end
+    else
+      %Item{} = item -> {:ok, item}
+    end
+  end
+
+  # A name is written the way it is said: "disk-free", "Disk free", "DISK FREE".
+  defp normalise(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, "-")
+    |> String.trim("-")
+  end
+
+  defp where([]), do: "the menu"
+  defp where([%Item{label: label} | _rest]), do: ~s("#{label}")
+
+  defp labels(items), do: Enum.map_join(items, ", ", & &1.label)
+
   defp title(%{"title" => title}) when is_binary(title) and title != "", do: title
   defp title(_map), do: "iTUI"
 end

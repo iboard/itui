@@ -23,8 +23,9 @@ defmodule ITui.Views.Todo do
   `due` date is: red once it has gone by, yellow within two days, orange
   within what is left of this calendar week, white for the rest of this month
   and light blue beyond it — and white again for a todo that is not due on any
-  particular day. Those bands are also what `ITui.Views.Filter` hides and
-  shows, so what is being hidden is named the way the screen already says it. Today's date is at the top of
+  particular day. Those bands are `ITui.Band`, which is also what
+  `ITui.Views.Filter` hides and shows and what `itui todo list --only overdue`
+  means, so what is being hidden is named the way the screen already says it. Today's date is at the top of
   the screen, because it is what all of that is reckoned from — the same value
   the colours are worked out with, not a second reading of the clock. The row the cursor is on keeps
   its colour and takes a background instead, so the one thing the colour says
@@ -47,7 +48,7 @@ defmodule ITui.Views.Todo do
   use Atui.View
 
   alias Atui.{Layout, Popup, Style, Text}
-  alias ITui.{Repo, Schema}
+  alias ITui.{Band, Repo, Schema}
   alias ITui.Schema.{Boolean, Field, Timestamp}
   alias ITui.Views.{Filter, Form}
 
@@ -59,8 +60,6 @@ defmodule ITui.Views.Todo do
   @min_flexible 6
   # However many the schema names, a list is a list and not a report.
   @max_detail 3
-  # Near enough to be worth a warning of its own.
-  @soon_days 2
   # The 256-colour palette's orange, between the yellow and the red.
   @orange 208
   # And its light blue, for what is far enough off to be somebody else's week.
@@ -191,7 +190,7 @@ defmodule ITui.Views.Todo do
   # The day the colours are reckoned from, said out loud: a row is orange
   # because of what is left of the week this date falls in.
   defp summary(state) do
-    done = Enum.count(state.todos, &done?/1)
+    done = Enum.count(state.todos, &Band.done?/1)
 
     "#{Calendar.strftime(today(state), "%a %Y-%m-%d")} · #{counted(state)}, #{done} done"
   end
@@ -406,54 +405,18 @@ defmodule ITui.Views.Todo do
   end
 
   @doc false
-  # Green once it is done; otherwise the colour of how near the due date is,
-  # and nothing at all for a todo that is not due on any particular day.
-  def tone(state, todo) do
-    if done?(todo), do: :done, else: due_tone(due(state, todo), today(state))
-  end
+  # Which band a todo falls in — see `ITui.Band`, which the filter and the
+  # command line reckon by as well.
+  def tone(state, todo), do: Band.of(state.schema, todo, today(state))
 
   defp today(state), do: state.today || ITui.Schema.Date.local_today()
-
-  @bands [
-    {:done, "Done"},
-    {:overdue, "Overdue"},
-    {:soon, "Due within two days"},
-    {:week, "Due this week"},
-    {:month, "Due this month"},
-    {:later, "Due later"},
-    {:none, "No due date"}
-  ]
-
-  @doc false
-  # The colours, in the order the ladder goes, as `ITui.Views.Filter` lists them.
-  def bands, do: @bands
 
   defp filter(state) do
     counts = Enum.frequencies_by(state.all, &tone(state, &1))
 
-    {:push, Filter, [bands: @bands, counts: counts, hidden: state.hidden, notify: __MODULE__],
+    {:push, Filter,
+     [bands: Band.list(), counts: counts, hidden: state.hidden, notify: __MODULE__],
      %{state | editing: :filtering}}
-  end
-
-  defp due(%{schema: nil}, _todo), do: nil
-
-  defp due(state, todo) do
-    case Schema.field(state.schema, :due) do
-      nil -> nil
-      field -> ITui.Schema.Date.parse(todo[field.key])
-    end
-  end
-
-  defp due_tone(nil, _today), do: :none
-
-  defp due_tone(date, today) do
-    cond do
-      Date.before?(date, today) -> :overdue
-      Date.diff(date, today) <= @soon_days -> :soon
-      not Date.after?(date, Date.end_of_week(today)) -> :week
-      not Date.after?(date, Date.end_of_month(today)) -> :month
-      true -> :later
-    end
   end
 
   defp tone_style(:done), do: Style.new(fg: :green)
@@ -647,7 +610,7 @@ defmodule ITui.Views.Todo do
   defp toggle(state, nil), do: state
 
   defp toggle(state, todo) do
-    params = params(state, %{done: not done?(todo)}, todo)
+    params = params(state, %{done: not Band.done?(todo)}, todo)
 
     state.schema |> Repo.update(todo[:id], params) |> handled(state)
   end
@@ -666,7 +629,7 @@ defmodule ITui.Views.Todo do
 
     cond do
       is_nil(Schema.field(state.schema, :done_at)) -> params
-      is_nil(done) or done == (previous && done?(previous)) -> params
+      is_nil(done) or done == (previous && Band.done?(previous)) -> params
       done -> Map.put(params, "done_at", Timestamp.now())
       true -> Map.put(params, "done_at", nil)
     end
@@ -701,8 +664,6 @@ defmodule ITui.Views.Todo do
   end
 
   defp current(state), do: Enum.at(state.todos, state.cursor)
-
-  defp done?(todo), do: todo[:done] == true
 
   defp move(state, by) do
     case length(state.todos) do

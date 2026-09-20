@@ -11,6 +11,11 @@ defmodule ITui.Application do
   Before the UI starts, `ITui.Data.resolve!/0` works out where the menus and
   schemas live and writes out the ones that are missing, so that an escript
   with no data directory beside it has one by the time a menu is read.
+
+  `config :i_tui, view_opts: [...]` is passed to the root view's `mount/1`.
+  That is how `ITui.CLI` says where to open — a menu entry named on the
+  command line, or the todo list — since the application is what starts the
+  UI and the arguments arrive before it does.
   """
 
   use Application
@@ -24,9 +29,11 @@ defmodule ITui.Application do
     if Application.get_env(:i_tui, :start_ui, true) do
       ITui.Data.resolve!()
 
-      [{Atui, view: ITui.Views.MainMenu}]
+      [{Atui, view: ITui.Views.MainMenu, view_opts: view_opts()}]
     else
       []
     end
   end
+
+  defp view_opts, do: Application.get_env(:i_tui, :view_opts, [])
 end

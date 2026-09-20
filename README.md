@@ -56,12 +56,68 @@ mix escript.build && ./itui
 itui              # open the menu
 itui --where      # say which data directory it is using
 itui --version
-itui --help
+itui --help       # all of it, at length
 ```
 
 The escript carries `+Bc`, which is what makes Ctrl-C reach the application
 instead of opening the BEAM's BREAK menu. From a clone, `bin/itui` does the
 same for `mix run`.
+
+### Going straight there
+
+Some of what iTUI does wants a screen, and some of it is a sentence. Both are
+the same command, because they are the same application: the menu, the schema
+and the records a line reads are the ones the screen shows.
+
+```console
+itui menu system/uptime      # open the menu there, and run it
+itui todo                    # open the todo list
+```
+
+A path says its way down the menu, as `system/uptime` or as the keys the
+entries carry, `s/u` — or as words, `itui menu system uptime`. A space may be
+written as a dash, and as much of an entry's name as says which one it is will
+do: `itui menu system/disk`. What happens at the end of the path is what
+pressing enter there would do, so an entry that asks for its arguments still
+asks. A name that is not in the menu is a line on the terminal and an exit
+status of 1, rather than a popup over a screen you did not want.
+
+### The todo list without a screen
+
+```console
+itui todo add "Buy milk" --due tomorrow --priority 1
+itui todo done 3
+itui todo list --hide done
+```
+
+The options `itui todo add` takes are the fields of your todo schema, read
+from the file: `--title`, `--description`, `--url`, `--priority`, `--due`, and
+`--done` on its own for a yes/no field. The words left over are what the todo
+is called, so `itui todo add "Buy milk"` needs no `--title`. Values are cast
+by the schema, which means `--due tomorrow` and the same complaint about a day
+that is not one as the form gives.
+
+`itui todo done` takes the numbers in the `#` column, one or several, and
+writes the moment the tick went in the way the screen does. Every number is
+looked up before any of them is written, so a typo at the end of the line does
+not leave half the work done and unsaid.
+
+`itui todo list` prints the columns the schema names and stops. `--only` and
+`--hide` name the kinds of todo to show and to leave out — the same kinds `f`
+hides and shows on the screen — as a list separated by commas or as the option
+again:
+
+```
+done · overdue · soon · week · month · later · none
+```
+
+```console
+$ itui todo list --hide done
+#  Done  P  Created     Due         Checked  Title           Description
+─  ────  ─  ──────────  ──────────  ───────  ──────────────  ─────────────────────
+1  [ ]   1  2026-09-19  2026-09-20           Buy milk
+3  [ ]   2  2026-09-19  2026-09-01           Publish it      to Hex, once it is …
+```
 
 ## Where your files live
 
@@ -286,8 +342,9 @@ takes the date away again.
 | white | due later than that but still this month, or not due on any particular day |
 | light blue | due beyond the end of this month |
 
-Those bands are also what `f` hides and shows, so what is being hidden is
-named the way the screen already says it — and each is listed with how many
+Those bands are `ITui.Band`, which is also what `f` hides and shows and what
+`itui todo list --only overdue` means, so what is being hidden is named the
+way the screen already says it — and each is listed with how many
 there are of it, because hiding a band of nothing is worth knowing before you
 go looking for what moved. The list behind the popup is filtered as the boxes
 are ticked rather than when it closes, and the summary reads `5 of 7 todos`
@@ -321,8 +378,10 @@ the `{{placeholders}}` with what the form collected:
 data/menus/main.json     the menu iTUI ships with
 data/schemas/*.json      the schemas it ships with
 lib/i_tui/data.ex        where those files live once it is installed
-lib/i_tui/cli.ex         the escript
+lib/i_tui/cli.ex         the escript, and what it takes on the line
+lib/i_tui/cli/           the todo list without a screen, and the help
 lib/i_tui/menu.ex        the menu file, parsed
+lib/i_tui/band.ex        what kind of todo a todo is: done, overdue, due soon
 lib/i_tui/command.ex     a system command, and the running of it
 lib/i_tui/schema.ex      a schema file, parsed, and its Ecto changesets
 lib/i_tui/repo.ex        where records live, behind one interface

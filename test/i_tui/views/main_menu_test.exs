@@ -36,7 +36,7 @@ defmodule ITui.Views.MainMenuTest do
     test "draws the entries of the top level", %{ui: ui} do
       screen = text(ui)
 
-      assert screen =~ "Test 0.1.0"
+      assert screen =~ "Test #{ITui.version()}"
       assert screen =~ "▸ s  System"
       assert screen =~ "q  Quit"
       assert screen =~ "2 entries →"
@@ -250,5 +250,89 @@ defmodule ITui.Views.MainMenuMissingTest do
     screen = press(ui, {:char, "f"})
 
     assert screen =~ "data/schemas/nonexistent.json: no such file or directory"
+  end
+end
+
+defmodule ITui.Views.MainMenuOpenTest do
+  @moduledoc """
+  The menu opened somewhere in particular, as the command line asks for it.
+
+  A module of its own: every one of these starts a UI of its own, and the
+  runtime registers itself under its own name.
+  """
+
+  use ITui.UICase, async: false
+
+  alias ITui.Menu
+  alias ITui.Views.{Form, MainMenu, Output, Todo}
+
+  @menu """
+  {
+    "title": "Test",
+    "items": [
+      {"key": "s", "label": "System", "items": [
+        {"key": "e", "label": "Echo", "command": "echo", "args": ["a line of output"]}
+      ]},
+      {"key": "f", "label": "Files", "items": [
+        {"key": "p", "label": "Working directory", "command": "pwd"}
+      ]},
+      {"key": "w", "label": "Echo a word", "command": "echo", "args": ["{{word}}"],
+       "form": "test/fixtures/word.json"},
+      {"key": "t", "label": "Todos", "view": "todo"}
+    ]
+  }
+  """
+
+  setup do
+    {:ok, menu} = Menu.parse(@menu)
+
+    %{menu: menu}
+  end
+
+  test "a path walks down to the entry and does what enter does", %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open: ["system", "echo"])
+
+    assert await_view(ui, Output) =~ "a line of output"
+
+    # And the menu underneath is where the path left it.
+    press(ui, :esc)
+    assert settle(ui) =~ "Test › System"
+  end
+
+  test "a path that stops at a submenu opens it", %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open: ["f"])
+
+    assert text(ui) =~ "Test › Files"
+    assert text(ui) =~ "▸ p  Working directory"
+    assert press(ui, :esc) =~ "▸ f  Files"
+  end
+
+  test "an entry that asks for its arguments still asks", %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open: ["echo-a-word"])
+
+    assert await_view(ui, Form) =~ "Echo a word"
+  end
+
+  test "a path that is not in the menu says so, rather than doing nothing", %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open: ["system", "nonsense"])
+
+    assert await_view(ui, Output) =~ ~s(there is no "nonsense" in "System")
+  end
+
+  test "a view is opened by name, whether or not the menu has an entry for it",
+       %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open_view: "todo")
+
+    assert await_view(ui, Todo) =~ "Todos"
+
+    press(ui, :esc)
+    assert settle(ui) =~ "▸ s  System"
+    assert Runtime.view_stack(ui) == [MainMenu]
+  end
+
+  test "a view that is not one says what there is", %{menu: menu} do
+    ui = start_ui(MainMenu, menu: menu, open_view: "spreadsheet")
+
+    assert await_view(ui, Output) =~ ~s(unknown view "spreadsheet")
   end
 end

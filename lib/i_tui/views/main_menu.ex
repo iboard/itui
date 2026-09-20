@@ -12,6 +12,22 @@ defmodule ITui.Views.MainMenu do
   popup is open it therefore passes everything but Ctrl-C along, so the arrows
   scroll the output instead of quietly moving a cursor nobody can see.
 
+  ## Opening somewhere in particular
+
+  The command line can say where to go before anyone has pressed anything —
+  `itui menu system/uptime`, `itui todo` — and it says so in the options this
+  view is mounted with:
+
+    * `:open` — a path of names through the menu (see `ITui.Menu.resolve/2`),
+      walked down to the entry it names and then activated, exactly as though
+      enter had been pressed on it
+    * `:open_view` — the name of an application to open straight away
+      (see `ITui.Views`), whether or not the menu has an entry for it
+
+  A view may only push another view from a callback, never from `mount/1`, so
+  the instruction is posted as this view's own first event and carried out as
+  soon as the runtime is listening.
+
   ## Keys
 
     * `↑`/`↓` or `k`/`j` — move
@@ -36,6 +52,8 @@ defmodule ITui.Views.MainMenu do
         {:ok, %Menu{} = menu} -> {menu, nil}
         :error -> load(Keyword.get(opts, :path))
       end
+
+    opening(Keyword.get(opts, :open, []), Keyword.get(opts, :open_view))
 
     {:ok,
      %{
@@ -99,6 +117,18 @@ defmodule ITui.Views.MainMenu do
        result: result,
        notify: __MODULE__
      ], %{state | busy: nil, popup?: true}}
+  end
+
+  # What the command line asked for, now that there is a runtime to ask.
+  def handle_event({:open, segments}, state) do
+    case Menu.resolve(state.menu.items, segments) do
+      {:ok, chain} -> jump(state, chain)
+      {:error, reason} -> complain(state, Enum.join(segments, "/"), reason)
+    end
+  end
+
+  def handle_event({:open_view, name}, state) do
+    open(state, %Item{label: name, view: name})
   end
 
   # The form the entry asked for has closed with values: now the command runs.
@@ -229,22 +259,40 @@ defmodule ITui.Views.MainMenu do
          %{state | pending: item, popup?: true}}
 
       {:error, reason} ->
-        complain(state, item, reason)
+        complain(state, item.label, reason)
     end
   end
 
   defp open(state, %Item{view: name} = item) do
     case Views.fetch(name) do
       {:ok, module} -> {:push, module, [notify: __MODULE__], %{state | popup?: true}}
-      {:error, reason} -> complain(state, item, reason)
+      {:error, reason} -> complain(state, item.label, reason)
     end
   end
 
   # A menu file that names something that is not there is worth saying out
   # loud, rather than a key that quietly does nothing.
-  defp complain(state, %Item{} = item, reason) do
-    {:push, Output, [title: item.label, result: {:error, reason}, notify: __MODULE__],
+  defp complain(state, title, reason) do
+    {:push, Output, [title: title, result: {:error, reason}, notify: __MODULE__],
      %{state | popup?: true}}
+  end
+
+  # A view may not push anything from mount/1, and the runtime is this process
+  # while a view is mounting — so an instruction from the command line is
+  # posted to this view and arrives as its first event.
+  defp opening([], nil), do: :ok
+  defp opening(_segments, name) when is_binary(name), do: tell({:open_view, name})
+  defp opening(segments, _name) when is_list(segments), do: tell({:open, segments})
+
+  defp tell(event), do: Atui.Runtime.send_event_to(self(), __MODULE__, event)
+
+  # Down to the entry the path names, and then whatever enter would have done
+  # to it — which may be to descend once more, to run something, or to quit.
+  defp jump(state, chain) do
+    {above, [last]} = Enum.split(chain, -1)
+    state = Enum.reduce(above, state, fn item, acc -> acc |> select(item) |> descend(item) end)
+
+    activate(select(state, last), last)
   end
 
   # Off the runtime's process: a slow command must not stop the UI drawing.

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-20
+
+### Added
+
+- Arguments for `itui`, so that it can be asked for one thing rather than
+  opened: `itui menu system/uptime` goes straight to a menu entry and does
+  what enter would do there, `itui todo` opens the todo list, and `itui todo
+  add`, `itui todo done` and `itui todo list` do their work without a screen
+  at all. `itui --help` says the whole of it, with the options `todo add`
+  takes read from the todo schema itself.
+- `ITui.Menu.resolve/2` — a path of names walked into the menu, matched
+  against an entry's key, its label, or as much of one as says which it is.
+- `ITui.Views.MainMenu` can be mounted at a menu entry (`:open`) or over an
+  application (`:open_view`), which is how the command line says where to go.
+- `ITui.Band` — what kind of todo a todo is, now that the list, the filter and
+  the command line all reckon by it.
+
+## [0.1.0] - 2026-09-19
+
 ### Added
 
 - `itui` as an escript: `mix escript.install hex i_tui`, with `--where`,
