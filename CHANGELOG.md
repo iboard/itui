@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-20
+
+### Fixed
+
+- Standard output is set to Unicode before anything is printed, so a machine
+  with no UTF-8 locale — most servers over ssh, and every one of them under
+  cron — draws the table rules and the box around the menu rather than
+  `\x{2500}`. The escript carries `+fnu` beside `+Bc` for the same reason,
+  and the VM stops warning that it expected a UTF-8 locale.
+
+### Changed
+
+- iTUI asks for Elixir ~> 1.18 rather than ~> 1.19, and for Atui ~> 0.4.1,
+  which does the same. An escript carries the Elixir it was built with, so
+  the Elixir that builds it decides which Erlang/OTP the result will load on:
+  built with 1.18 it runs on OTP 25 and upwards, which is a production
+  machine nobody has upgraded lately. Nothing here needed the newer Elixir.
+  Tested on 1.18.5/OTP 25 as well as on 1.19.5/OTP 28.
+
 ## [0.1.1] - 2026-09-20
 
 ### Added

@@ -1,14 +1,14 @@
 defmodule ITui.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
   @source_url "https://github.com/iboard/itui"
 
   def project do
     [
       app: :i_tui,
       version: @version,
-      elixir: "~> 1.19",
+      elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -38,7 +38,7 @@ defmodule ITui.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:atui, "~> 0.4"},
+      {:atui, "~> 0.4.1"},
       {:ecto, "~> 3.13"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
