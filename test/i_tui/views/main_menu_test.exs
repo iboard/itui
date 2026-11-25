@@ -40,7 +40,7 @@ defmodule ITui.Views.MainMenuTest do
       assert screen =~ "▸ s  System"
       assert screen =~ "q  Quit"
       assert screen =~ "2 entries →"
-      assert screen =~ "↑↓ move · enter run · ? about · q quit"
+      assert screen =~ "↑↓ move · enter run · ? about · esc or q quit"
     end
 
     test "shows the description of the entry under the cursor", %{ui: ui} do
@@ -79,9 +79,11 @@ defmodule ITui.Views.MainMenuTest do
       assert cursor(ui) == 1
     end
 
-    test "esc at the top level does nothing", %{ui: ui} do
-      assert press(ui, :esc) =~ "▸ s  System"
-      assert Runtime.view_stack(ui) == [MainMenu]
+    test "esc at the top level leaves, there being nothing above it", %{ui: ui} do
+      ref = Process.monitor(ui)
+      Runtime.send_key(ui, :esc)
+
+      assert_receive {:DOWN, ^ref, :process, ^ui, :normal}, 1_000
     end
   end
 
@@ -192,6 +194,35 @@ defmodule ITui.Views.MainMenuTest do
       ref = Process.monitor(ui)
       Runtime.send_key(ui, :end)
       Runtime.send_key(ui, :enter)
+
+      assert_receive {:DOWN, ^ref, :process, ^ui, :normal}, 1_000
+    end
+
+    test "esc stops the UI at the top level", %{ui: ui} do
+      ref = Process.monitor(ui)
+      Runtime.send_key(ui, :esc)
+
+      assert_receive {:DOWN, ^ref, :process, ^ui, :normal}, 1_000
+    end
+
+    test "esc backs out of a submenu before it stops anything", %{ui: ui} do
+      ref = Process.monitor(ui)
+
+      assert press(ui, {:char, "s"}) =~ "Test › System"
+      assert press(ui, :esc) =~ "▸ s  System"
+      refute_receive {:DOWN, ^ref, :process, ^ui, _reason}, 200
+
+      Runtime.send_key(ui, :esc)
+
+      assert_receive {:DOWN, ^ref, :process, ^ui, :normal}, 1_000
+    end
+
+    test "ctrl-c stops the UI from under a popup", %{ui: ui} do
+      press(ui, {:char, "t"})
+      await_view(ui, Todo)
+
+      ref = Process.monitor(ui)
+      Runtime.send_key(ui, :ctrl_c)
 
       assert_receive {:DOWN, ^ref, :process, ^ui, :normal}, 1_000
     end

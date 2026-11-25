@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `esc` quits from the top level of the menu. It already closed every other
+  view and backed out of every submenu; with nothing left above it, backing
+  out is leaving. `q` still quits, and `ctrl-c` still quits from anywhere —
+  `Atui.Runtime` answers it before any view sees it.
+
 ## [0.1.3] - 2026-09-20
 
 ### Changed

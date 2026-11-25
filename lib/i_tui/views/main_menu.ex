@@ -35,7 +35,8 @@ defmodule ITui.Views.MainMenu do
     * an entry's own key — the same, without moving first
     * `esc`, `←` or `backspace` — back out of a submenu
     * `?` — what this is, and what it is built on
-    * `q` — quit
+    * `q`, or `esc` with nothing left to back out of — quit
+    * `ctrl-c` — quit, from wherever in the application (`Atui.Runtime`)
   """
 
   use Atui.View
@@ -78,6 +79,11 @@ defmodule ITui.Views.MainMenu do
   def handle_key(_key, %{popup?: true} = state), do: {:pass, state}
 
   def handle_key({:char, "q"}, state), do: {:halt, state}
+
+  # esc backs out of a submenu, and every other view is closed with it. At the
+  # top level there is nothing left to back out of, so it does there what it
+  # does everywhere else: it leaves.
+  def handle_key(:esc, %{trail: []} = state), do: {:halt, state}
 
   def handle_key({:char, "?"}, state) do
     {:push, About, [notify: __MODULE__], %{state | popup?: true}}
@@ -217,9 +223,9 @@ defmodule ITui.Views.MainMenu do
   defp keys(%{trail: []}, width) do
     Text.first_fitting(
       [
-        "↑↓ move · enter run · ? about · q quit",
-        "↑↓ move · enter run · q quit",
-        "↑↓ · enter · q"
+        "↑↓ move · enter run · ? about · esc or q quit",
+        "↑↓ move · enter run · esc or q quit",
+        "↑↓ · enter · esc"
       ],
       width
     )

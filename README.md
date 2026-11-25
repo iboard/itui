@@ -150,7 +150,8 @@ directory is in use.
 | an entry's own key | the same, without moving first |
 | `esc`, `←`, `backspace` | back out of a submenu |
 | `?` | what this is, and what it is built on |
-| `q` | quit |
+| `q`, or `esc` at the top level | quit |
+| `ctrl-c` | quit, from wherever you are |
 
 While a command's output is open, the arrows and `page up`/`page down` scroll
 it and `esc` closes it.
